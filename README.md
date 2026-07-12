@@ -3,7 +3,7 @@
 Integrazione Home Assistant per la ventilazione meccanica controllata (VMC) Pure.
 
 Comunica direttamente con l'interfaccia web dell'unità tramite HTTP locale — nessun cloud richiesto.
-Compatibile con Pure 250 e altri modelli della serie Pure.
+Compatibile con Pure 250 e altri modelli della serie Pure il cui comando touch è dotato di porta ethernet RJ45.
 
 ## Funzionalità
 
@@ -35,7 +35,7 @@ Dopo l'installazione, vai su:
 
 **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → Pure VMC**
 
-Inserisci l'indirizzo IP dell'unità (es. `192.168.1.100`). L'integrazione testerà automaticamente la connessione.
+Inserisci l'indirizzo IP dell'unità (es. `192.168.1.243`). L'integrazione testerà automaticamente la connessione.
 
 ## Velocità e modalità
 
@@ -65,6 +65,9 @@ Inserisci l'indirizzo IP dell'unità (es. `192.168.1.100`). L'integrazione teste
 Sviluppato da **Nicola Possamai** ([@nicpos95](https://github.com/nicpos95)).
 
 Se utilizzi o distribuisci questo codice, ti chiedo gentilmente di mantenere i crediti e di citarmi come autore originale.
+
+Si declina ogni responsabilità sull'uso del codice.
+Non sono in nessun modo affiliato con produttori di VMC e/o installatori. Il codice è fornito in buona fede per facilitare l'integrazione al prossimo.
 
 ## Licenza
 
