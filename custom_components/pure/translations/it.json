@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pure VMC",
+        "description": "Inserisci l'indirizzo IP locale della tua unità Pure.",
+        "data": {
+          "host": "Indirizzo IP o hostname"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi al dispositivo. Verifica l'indirizzo IP e assicurati che l'unità sia accesa e raggiungibile."
+    },
+    "abort": {
+      "already_configured": "Questo dispositivo è già configurato."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temp_external": {
+        "name": "Temperatura Esterna"
+      },
+      "temp_return": {
+        "name": "Temperatura di Ripresa"
+      },
+      "temp_exhaust": {
+        "name": "Temperatura di Espulsione"
+      },
+      "temp_inlet": {
+        "name": "Temperatura di Immissione"
+      },
+      "speed": {
+        "name": "Velocità Ventilazione"
+      },
+      "heat_recovery_efficiency": {
+        "name": "Efficienza Recupero Calore"
+      }
+    },
+    "fan": {
+      "fan": {
+        "name": "Ventilazione"
+      }
+    }
+  }
+}
