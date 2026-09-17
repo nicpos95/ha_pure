@@ -2,7 +2,9 @@
 
 Integrazione Home Assistant per la ventilazione meccanica controllata (VMC) Pure.
 
-Comunica direttamente con l'interfaccia web dell'unità tramite HTTP locale — nessun cloud richiesto.
+Comunica direttamente con l'unità in rete locale — nessun cloud richiesto. Lo stato viene letto via
+**Modbus TCP** quando il pannello lo offre (porta 502), altrimenti dalle pagine web; i comandi passano
+sempre dall'interfaccia web.
 Compatibile con Pure 250 e altri modelli della serie Pure il cui comando touch è dotato di porta ethernet RJ45.
 
 ## Funzionalità
@@ -11,6 +13,10 @@ Compatibile con Pure 250 e altri modelli della serie Pure il cui comando touch �
 - **4 sensori di temperatura** — Esterna (Te), Ripresa (Tr), Espulsione (Tx), Immissione (Ti).
 - **Sensore velocità** — Percentuale corrente + modalità timer (Orologio).
 - **Efficienza recupero calore** — Calcolata automaticamente in %.
+- **Allarmi e stato** — Filtri sporchi, allarme generico, bypass free-cooling, set-point temperatura.
+- **Via Modbus TCP** — Velocità reale dei due ventilatori, ore di funzionamento, singoli allarmi
+  (sonde, ventilatori, comunicazione, configurazione, antigelo), modalità di funzionamento, stagione,
+  modalità bypass, soglia ore filtri, versione firmware.
 - **Config flow** — Aggiungi tramite UI → "Pure VMC".
 
 ## Installazione
@@ -64,8 +70,49 @@ Inserisci l'indirizzo IP dell'unità (es. `192.168.1.243`). L'integrazione teste
 | `binary_sensor` | Alarm | Un qualsiasi allarme attivo — `problem` |
 | `binary_sensor` | Bypass | Bypass free-cooling aperto |
 
-Tutte le entità sono in sola lettura e vengono lette dalle pagine della schermata
+Queste entità sono sempre disponibili. Senza Modbus vengono lette dalle pagine della schermata
 principale, senza navigare i menu dell'unità (quindi il pannello a muro non viene disturbato).
+
+### Entità aggiuntive via Modbus TCP
+
+Create solo se l'unità risponde su Modbus TCP (porta 502).
+
+| Platform | Nome | Descrizione |
+|----------|------|-------------|
+| `sensor` | Supply Fan Speed | Velocità reale ventilatore di immissione (RPM con segnale tachimetrico, altrimenti %) |
+| `sensor` | Exhaust Fan Speed | Velocità reale ventilatore di ripresa |
+| `sensor` | Fan Run Hours | Ore di funzionamento dell'unità |
+| `sensor` | Boost Time Remaining | Secondi rimanenti del booster |
+| `sensor` | Operating Mode | `off` / `manual` / `schedule` (Orologio) / `auto` / `boost` |
+| `sensor` | Season | Stagione impostata (`auto` / `winter` / `summer`) — diagnostica |
+| `sensor` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`) — diagnostica |
+| `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
+| `binary_sensor` | Anti-Frost | Antigelo scambiatore attivo |
+| `binary_sensor` | … Fault (×8) | Le singole voci della schermata Allarmi: comunicazione, configurazione, sonde Te/Tr/Tx/Ti, ventilatori, antigelo — `problem`, diagnostica |
+
+## Modbus TCP
+
+Il pannello touch con porta ethernet (EVO-PH / X511) espone tutto lo stato come *holding registers*.
+Un'unica breve connessione per ciclo restituisce più dati di nove pagine web e non carica il piccolo
+web server dell'unità. Il Modbus viene rilevato da solo all'avvio: se il pannello è impostato su RS485
+(menu Installatore → Comunicazione → Modbus) o non risponde, l'integrazione continua a leggere le pagine
+web come prima, e fa lo stesso per il singolo ciclo in cui il Modbus dovesse mancare. Si può disattivare
+da **Configura** nella scheda dell'integrazione.
+
+Dettagli: TCP 502, funzione 03, l'indirizzo sul filo è il numero di registro del manuale meno 1, e il
+pannello chiude la connessione dopo 10 s senza accessi (per questo se ne apre una per ciclo). Nessuna
+dipendenza esterna: il client è incluso (`modbus.py`).
+
+I comandi (velocità, on/off, boost) restano sull'interfaccia web: il manuale avverte che le scritture
+Modbus vengono annullate allo scadere del timeout o allo spegnimento, mentre quelle da web server sono
+permanenti.
+
+## Test
+
+```
+pip install -r requirements_test.txt
+pytest
+```
 
 ## Crediti
 
