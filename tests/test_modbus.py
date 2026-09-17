@@ -48,6 +48,15 @@ async def test_write_register(panel: FakePanel, socket_enabled) -> None:
     # Writing what is already there is not a refusal
     assert await client.write_register(20, 1, mask=0b11) == 33
 
+    # Each change was stored: set-points with bit 15, configuration with bit 14,
+    # and the notice flags already in register 5 were left as they were
+    assert panel.stored == [0b10, 0b10, 0b01]
+    assert panel.registers[5] == 17
+
+    # A value that is temporary by nature is written without being stored
+    assert await client.write_register(53, 600, store=False) == 600
+    assert panel.stored == [0b10, 0b10, 0b01]
+
 
 @pytest.mark.enable_socket
 async def test_write_ignored_during_lockout(panel: FakePanel, socket_enabled) -> None:
@@ -56,6 +65,7 @@ async def test_write_ignored_during_lockout(panel: FakePanel, socket_enabled) ->
     with pytest.raises(PureModbusWriteIgnored):
         await client.write_register(51, 30)
     assert panel.registers[51] == 0
+    assert panel.stored == []
 
 
 def test_decode_live_capture() -> None:

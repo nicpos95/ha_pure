@@ -53,6 +53,8 @@ async def test_fan_speed_over_modbus(
 
     await _call(hass, "fan", "turn_off", entity_id=FAN)
     assert panel.registers[51] == 0
+    # Both changes were stored, so "off" is still off after a restart
+    assert panel.stored == [0b10, 0b10]
 
     # Turning back on returns to the last speed, in one write and no web request
     await _call(hass, "fan", "turn_on", entity_id=FAN)
@@ -65,8 +67,10 @@ async def test_fan_presets_over_modbus(
 ) -> None:
     await _call(hass, "fan", "set_percentage", entity_id=FAN, percentage=30)
 
+    stored_before_boost = list(panel.stored)
     await _call(hass, "fan", "set_preset_mode", entity_id=FAN, preset_mode="boost")
     assert panel.registers[53] == 15 * 60
+    assert panel.stored == stored_before_boost  # a countdown is not worth storing
     assert hass.states.get(FAN).attributes["preset_mode"] == "boost"
     assert hass.states.get("number.pure_vmc_boost_timer").state == "15"
 

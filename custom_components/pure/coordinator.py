@@ -46,8 +46,8 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.api = api
         self.modbus = modbus
         self._modbus_failing = False
-        # Dropped writes waiting for the unit: (register, mask) -> (value, deadline)
-        self._pending_writes: dict[tuple[int, int], tuple[int, float]] = {}
+        # Dropped writes waiting for the unit: (register, mask) -> (value, deadline, store)
+        self._pending_writes: dict[tuple[int, int], tuple[int, float, bool]] = {}
         self._cancel_retry: CALLBACK_TYPE | None = None
         super().__init__(
             hass,
@@ -58,20 +58,27 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def async_write_register(
-        self, register: int, value: int, mask: int = 0xFFFF, *, retry: bool = True
+        self,
+        register: int,
+        value: int,
+        mask: int = 0xFFFF,
+        *,
+        retry: bool = True,
+        store: bool = True,
     ) -> None:
         """Write a register (verified by reading it back) and refresh the state.
 
         When the unit drops the write, it is queued and retried until the unit
         accepts writes again; with ``retry=False`` the refusal is raised instead,
-        for callers that have another way to deliver the command.
+        for callers that have another way to deliver the command. ``store=False``
+        is for values that are temporary by nature, like a running boost.
         """
         assert self.modbus is not None
         key = (register, mask)
         # A newer command for the same setting replaces one still waiting
         self._pending_writes.pop(key, None)
         try:
-            await self.modbus.write_register(register, value, mask)
+            await self.modbus.write_register(register, value, mask, store)
         except PureModbusWriteIgnored:
             if not retry:
                 raise
@@ -81,7 +88,7 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 register,
                 WRITE_RETRY_WINDOW,
             )
-            self._pending_writes[key] = (value, monotonic() + WRITE_RETRY_WINDOW)
+            self._pending_writes[key] = (value, monotonic() + WRITE_RETRY_WINDOW, store)
             self._schedule_retry()
             return
         # Not async_request_refresh(): its debouncer would leave the entities
@@ -99,9 +106,9 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         assert self.modbus is not None
         written = False
         for key, pending in list(self._pending_writes.items()):
-            (register, mask), (value, deadline) = key, pending
+            (register, mask), (value, deadline, store) = key, pending
             try:
-                await self.modbus.write_register(register, value, mask)
+                await self.modbus.write_register(register, value, mask, store)
             except PureModbusError as err:
                 if monotonic() >= deadline and self._pending_writes.get(key) == pending:
                     del self._pending_writes[key]

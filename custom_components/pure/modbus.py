@@ -37,6 +37,7 @@ READ_BLOCKS: tuple[tuple[int, int], ...] = (
 
 REG_SW_VERSION_YEAR_MONTH = 3
 REG_SW_VERSION_DAY_PATCH = 4
+REG_REMOTE_CONTROL = 5
 REG_CONFIG_FLAGS_1 = 7
 REG_PARAMETER_FLAGS = 20
 REG_FILTER_MAX_HOURS = 24
@@ -54,6 +55,15 @@ REG_ALARMS_1 = 90
 REG_FAN_HOURS_HIGH = 95
 REG_FAN_HOURS_LOW = 96
 REG_ALARMS_2 = 97
+
+# REMOTE_CONTROL (register 5) bits. A value written over Modbus is temporary:
+# the unit goes back to the saved one after about a minute without register
+# access (so at the latest when Home Assistant restarts), unless it is stored
+# with one of the two "write pending" bits, which clear themselves once done.
+REMOTE_DEVICE_RESET = 1 << 13  # restarts the controller: never set
+REMOTE_STORE_CONFIG = 1 << 14  # stores the configuration registers (1-38)
+REMOTE_STORE_SETPOINTS = 1 << 15  # stores the command registers (51-54)
+FIRST_COMMAND_REGISTER = 51
 
 # ALARMS1 (register 90) bits
 ALARM1_COMM_X540 = 0
@@ -198,9 +208,13 @@ class PureModbus:
         return struct.unpack(f">{count}H", body[2 : 2 + count * 2])
 
     async def write_register(
-        self, register: int, value: int, mask: int = 0xFFFF
+        self, register: int, value: int, mask: int = 0xFFFF, store: bool = True
     ) -> int:
         """Write ``value`` into the ``mask`` bits of a register; return the result.
+
+        With ``store`` the unit is also told to save the value permanently, as
+        its own web page does; without it the value lasts only while the
+        registers keep being polled.
 
         A write response proves nothing on this panel: it acknowledges writes it
         then drops. So the register is read before and after, and a value that
@@ -210,7 +224,7 @@ class PureModbus:
         async with self._lock:
             try:
                 return await asyncio.wait_for(
-                    self._write_register(register, value, mask),
+                    self._write_register(register, value, mask, store),
                     timeout=REQUEST_TIMEOUT * 3,
                 )
             except asyncio.TimeoutError as err:
@@ -222,7 +236,9 @@ class PureModbus:
                     f"Modbus connection to {self._host}:{self._port} failed: {err}"
                 ) from err
 
-    async def _write_register(self, register: int, value: int, mask: int) -> int:
+    async def _write_register(
+        self, register: int, value: int, mask: int, store: bool
+    ) -> int:
         reader, writer = await asyncio.open_connection(self._host, self._port)
         try:
             (before,) = await self._read_holding(reader, writer, register - 1, 1)
@@ -241,6 +257,25 @@ class PureModbus:
                     f"The unit ignored the write to register {register}; it refuses "
                     "Modbus writes for 60 s after a change made from its own "
                     "web page or touch panel"
+                )
+            if store:
+                (flags,) = await self._read_holding(
+                    reader, writer, REG_REMOTE_CONTROL - 1, 1
+                )
+                store_bit = (
+                    REMOTE_STORE_SETPOINTS
+                    if register >= FIRST_COMMAND_REGISTER
+                    else REMOTE_STORE_CONFIG
+                )
+                await self._exchange(
+                    reader,
+                    writer,
+                    struct.pack(
+                        ">BHH",
+                        FUNCTION_WRITE_SINGLE,
+                        REG_REMOTE_CONTROL - 1,
+                        (flags | store_bit) & ~REMOTE_DEVICE_RESET,
+                    ),
                 )
             return after
         finally:

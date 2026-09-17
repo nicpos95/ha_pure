@@ -32,14 +32,16 @@ class FakePanel:
     """A tiny Modbus TCP server: reads, and writes the way the real panel does.
 
     Like the real one it acknowledges every write, silently drops them while
-    ``locked_out`` (the 60 s after a web-page change) and raises speeds below
-    20 % to 20 %.
+    ``locked_out`` (the 60 s after a web-page change), raises speeds below
+    20 % to 20 %, and clears the "store" bits of register 5 by itself; which
+    ones were asked for is kept in ``stored``.
     """
 
     def __init__(self) -> None:
         self.registers: dict[int, int] = dict(LIVE_REGISTERS)
         self.requests = 0
         self.locked_out = False
+        self.stored: list[int] = []
         self.port = 0
         self._server: asyncio.AbstractServer | None = None
 
@@ -67,6 +69,11 @@ class FakePanel:
                     value = count
                     if address + 1 == 51 and 0 < value < 20:
                         value = 20
+                    if address + 1 == 5:
+                        assert not value & 1 << 13, "device reset bit must never be set"
+                        if not self.locked_out and value >> 14:
+                            self.stored.append(value >> 14)
+                        value &= 0x3FFF
                     if not self.locked_out:
                         self.registers[address + 1] = value
                     body = struct.pack(">BHH", function, address, count)

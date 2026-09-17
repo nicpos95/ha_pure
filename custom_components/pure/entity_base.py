@@ -31,10 +31,12 @@ class PureEntity(CoordinatorEntity[PureCoordinator]):
         )
 
     async def _async_write_register(
-        self, register: int, value: int, mask: int = 0xFFFF
+        self, register: int, value: int, mask: int = 0xFFFF, store: bool = True
     ) -> None:
         """Write over Modbus, surfacing a refusal as an error the user can read."""
         try:
-            await self.coordinator.async_write_register(register, value, mask)
+            await self.coordinator.async_write_register(
+                register, value, mask, store=store
+            )
         except PureModbusError as err:
             raise HomeAssistantError(str(err)) from err

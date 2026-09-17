@@ -76,4 +76,4 @@ class PureBoostNumber(PureEntity, NumberEntity):
         return -(-seconds // 60)  # round up, so a running boost never reads 0
 
     async def async_set_native_value(self, value: float) -> None:
-        await self._async_write_register(REG_BOOST_TIMER, int(value) * 60)
+        await self._async_write_register(REG_BOOST_TIMER, int(value) * 60, store=False)

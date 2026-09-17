@@ -119,12 +119,15 @@ Due particolarità del pannello, verificate su una Pure 250:
   dopo averlo scritto. Se il valore non si è mosso, la ventola ripiega subito sull'interfaccia web; per le
   altre entità il comando resta in coda e viene riprovato ogni 15 secondi (fino a 3 minuti) finché
   l'unità lo accetta — nel frattempo l'entità mostra ancora il valore reale.
-- **Le scritture Modbus sono temporanee.** Un valore scritto via Modbus torna a quello salvato da
-  pannello/web dopo circa un minuto senza accessi ai registri (misurato: tra 45 e 100 secondi), oltre che
-  allo spegnimento. L'interrogazione ogni 30 secondi dell'integrazione lo mantiene attivo, ma **un riavvio
-  di Home Assistant no**: l'unità torna ai valori salvati — ad esempio una ventola spenta da Home Assistant
-  può ripartire alla velocità impostata l'ultima volta da pannello. Il manuale prevede due bit per
-  salvare i valori in memoria permanente (registro 5, B14/B15); il loro uso non è ancora implementato.
+- **Le scritture Modbus da sole sono temporanee.** Un valore scritto via Modbus torna a quello salvato
+  da pannello/web dopo circa un minuto senza accessi ai registri (misurato: tra 45 e 100 secondi): basta
+  un riavvio di Home Assistant, e una ventola spenta da Home Assistant ripartirebbe alla velocità
+  impostata l'ultima volta da pannello. Per questo, dopo ogni scrittura riuscita, l'integrazione chiede
+  all'unità di **salvare il valore in memoria permanente** (registro 5: bit 14 per la configurazione, bit 15
+  per i set-point — la stessa cosa che fa la pagina web dell'unità a ogni modifica). Verificato: i valori
+  restano dopo oltre due minuti senza alcun accesso. Fa eccezione il booster, che è un conto alla
+  rovescia e non viene salvato. Chi automatizza la velocità con cambi molto frequenti tenga presente che
+  ogni cambio è una scrittura sulla memoria non volatile dell'unità, come lo sarebbe dal pannello.
 
 ## Diagnostica
 

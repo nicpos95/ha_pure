@@ -168,12 +168,14 @@ class PureFan(PureEntity, FanEntity):
     async def _async_set_preset_mode_modbus(self, preset_mode: str) -> None:
         data = self.coordinator.data
         if preset_mode == PRESET_BOOST:
-            await self._async_write_register(REG_BOOST_TIMER, DEFAULT_BOOST_SECONDS)
+            await self._async_write_register(
+                REG_BOOST_TIMER, DEFAULT_BOOST_SECONDS, store=False
+            )
         elif preset_mode == PRESET_SCHEDULE:
             await self._async_write_register(REG_SPEED_SETPOINT, SPEED_SETPOINT_TIMER)
         elif preset_mode == PRESET_NORMAL:
             if data.get("boost_remaining"):
-                await self._async_write_register(REG_BOOST_TIMER, 0)
+                await self._async_write_register(REG_BOOST_TIMER, 0, store=False)
             if not SPEED_MIN <= (data.get("speed") or 0) <= SPEED_MAX:
                 await self._async_write_register(REG_SPEED_SETPOINT, self._last_speed)
 
