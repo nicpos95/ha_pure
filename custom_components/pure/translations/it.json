@@ -72,22 +72,6 @@
           "boost": "Booster"
         }
       },
-      "season": {
-        "name": "Stagione",
-        "state": {
-          "auto": "Automatica",
-          "winter": "Inverno",
-          "summer": "Estate"
-        }
-      },
-      "bypass_mode": {
-        "name": "Modalità Bypass",
-        "state": {
-          "auto": "Automatico",
-          "off": "Spento",
-          "on": "Acceso"
-        }
-      },
       "filter_max_hours": {
         "name": "Soglia Allarme Filtri"
       }
@@ -132,7 +116,42 @@
     },
     "fan": {
       "fan": {
-        "name": "Ventilazione"
+        "name": "Ventilazione",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "normal": "Normale",
+              "boost": "Booster",
+              "schedule": "Programma settimanale"
+            }
+          }
+        }
+      }
+    },
+    "number": {
+      "temp_setpoint": {
+        "name": "Temperatura Impostata"
+      },
+      "boost_timer": {
+        "name": "Timer Booster"
+      }
+    },
+    "select": {
+      "season": {
+        "name": "Stagione",
+        "state": {
+          "auto": "Automatica",
+          "winter": "Inverno",
+          "summer": "Estate"
+        }
+      },
+      "bypass_mode": {
+        "name": "Modalità Bypass",
+        "state": {
+          "auto": "Automatico",
+          "off": "Chiuso",
+          "on": "Aperto"
+        }
       }
     }
   }

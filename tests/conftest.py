@@ -29,11 +29,17 @@ WEB_PAGES: dict[str, str] = {
 
 
 class FakePanel:
-    """A tiny Modbus TCP server answering function 3 from a register dict."""
+    """A tiny Modbus TCP server: reads, and writes the way the real panel does.
+
+    Like the real one it acknowledges every write, silently drops them while
+    ``locked_out`` (the 60 s after a web-page change) and raises speeds below
+    20 % to 20 %.
+    """
 
     def __init__(self) -> None:
         self.registers: dict[int, int] = dict(LIVE_REGISTERS)
         self.requests = 0
+        self.locked_out = False
         self.port = 0
         self._server: asyncio.AbstractServer | None = None
 
@@ -57,8 +63,18 @@ class FakePanel:
                     ">BHH", await reader.readexactly(length - 1)
                 )
                 self.requests += 1
-                values = [self.registers.get(address + 1 + i, 0) for i in range(count)]
-                body = struct.pack(f">BB{count}H", function, count * 2, *values)
+                if function == 6:
+                    value = count
+                    if address + 1 == 51 and 0 < value < 20:
+                        value = 20
+                    if not self.locked_out:
+                        self.registers[address + 1] = value
+                    body = struct.pack(">BHH", function, address, count)
+                else:
+                    values = [
+                        self.registers.get(address + 1 + i, 0) for i in range(count)
+                    ]
+                    body = struct.pack(f">BB{count}H", function, count * 2, *values)
                 writer.write(
                     struct.pack(">HHHB", transaction, 0, len(body) + 1, unit) + body
                 )

@@ -36,6 +36,16 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
 
+    async def async_write_register(
+        self, register: int, value: int, mask: int = 0xFFFF
+    ) -> None:
+        """Write a register (verified by reading it back) and refresh the state."""
+        assert self.modbus is not None
+        await self.modbus.write_register(register, value, mask)
+        # Not async_request_refresh(): its debouncer would leave the entities
+        # showing the old state for up to 10 s when commands follow each other.
+        await self.async_refresh()
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch all data from the device in one go."""
         if self.modbus is not None:

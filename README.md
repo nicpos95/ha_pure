@@ -3,8 +3,8 @@
 Integrazione Home Assistant per la ventilazione meccanica controllata (VMC) Pure.
 
 Comunica direttamente con l'unità in rete locale — nessun cloud richiesto. Lo stato viene letto via
-**Modbus TCP** quando il pannello lo offre (porta 502), altrimenti dalle pagine web; i comandi passano
-sempre dall'interfaccia web.
+**Modbus TCP** quando il pannello lo offre (porta 502), altrimenti dalle pagine web. Con il Modbus
+attivo anche i comandi passano da lì (con l'interfaccia web come riserva per la ventola).
 Compatibile con Pure 250 e altri modelli della serie Pure il cui comando touch è dotato di porta ethernet RJ45.
 
 ## Funzionalità
@@ -84,8 +84,10 @@ Create solo se l'unità risponde su Modbus TCP (porta 502).
 | `sensor` | Fan Run Hours | Ore di funzionamento dell'unità |
 | `sensor` | Boost Time Remaining | Secondi rimanenti del booster |
 | `sensor` | Operating Mode | `off` / `manual` / `schedule` (Orologio) / `auto` / `boost` |
-| `sensor` | Season | Stagione impostata (`auto` / `winter` / `summer`) — diagnostica |
-| `sensor` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`) — diagnostica |
+| `select` | Season | Stagione (`auto` / `winter` / `summer`) — **modificabile** |
+| `select` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`) — **modificabile** |
+| `number` | Temperature Setpoint | Set-point temperatura, passi di 0,2 °C — **modificabile** |
+| `number` | Boost Timer | Minuti di booster: impostarlo avvia il booster, 0 lo annulla |
 | `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
 | `binary_sensor` | Anti-Frost | Antigelo scambiatore attivo |
 | `binary_sensor` | … Fault (×8) | Le singole voci della schermata Allarmi: comunicazione, configurazione, sonde Te/Tr/Tx/Ti, ventilatori, antigelo — `problem`, diagnostica |
@@ -103,9 +105,22 @@ Dettagli: TCP 502, funzione 03, l'indirizzo sul filo è il numero di registro de
 pannello chiude la connessione dopo 10 s senza accessi (per questo se ne apre una per ciclo). Nessuna
 dipendenza esterna: il client è incluso (`modbus.py`).
 
-I comandi (velocità, on/off, boost) restano sull'interfaccia web: il manuale avverte che le scritture
-Modbus vengono annullate allo scadere del timeout o allo spegnimento, mentre quelle da web server sono
-permanenti.
+### Comandi via Modbus
+
+Con il Modbus attivo la ventola si comanda scrivendo direttamente il set-point di velocità (una sola
+scrittura invece di una serie di pressioni sui tasti +/- della pagina web), e il preset **schedule**
+rimette l'unità sul programma settimanale (Orologio). Il preset **boost** avvia 15 minuti di booster;
+per una durata diversa usare *Boost Timer*.
+
+Due particolarità del pannello, verificate su una Pure 250:
+
+- **Conferma le scritture anche quando le scarta.** Per 60 secondi dopo ogni modifica fatta dalla pagina
+  web (o dal touch) risponde "ok" e lascia il valore com'era. L'integrazione rilegge quindi ogni registro
+  dopo averlo scritto: se il valore non si è mosso, la ventola ripiega sull'interfaccia web, mentre le
+  altre entità segnalano l'errore (riprovare dopo un minuto).
+- **Le scritture Modbus non sono salvate in memoria permanente**: secondo il manuale, allo spegnimento
+  l'unità torna ai valori impostati da pannello o da web. Dopo un'interruzione di corrente Home Assistant
+  mostrerà quindi lo stato reale dell'unità, non l'ultimo comando inviato.
 
 ## Test
 

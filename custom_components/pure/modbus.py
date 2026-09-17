@@ -23,6 +23,10 @@ DEFAULT_PORT = 502
 REQUEST_TIMEOUT = 5  # seconds
 
 FUNCTION_READ_HOLDING = 0x03
+FUNCTION_WRITE_SINGLE = 0x06
+
+# The panel needs a moment before a written value can be read back
+WRITE_SETTLE_TIME = 0.4  # seconds
 
 # (first register, count) — contiguous blocks that cover everything we decode.
 READ_BLOCKS: tuple[tuple[int, int], ...] = (
@@ -72,6 +76,11 @@ STATUS_ANTI_FROST_ACTIVE = 4
 # CONFIG_FLAGS_1 (register 7): bits 8-9 == 2 means the fans report a tacho signal
 FANS_FAIL_TACH = 2
 
+# PARAMETER_FLAGS (register 20): season in bits 0-1, bypass mode in bits 2-3
+SEASON_MASK = 0b0011
+BYPASS_MODE_MASK = 0b1100
+BYPASS_MODE_SHIFT = 2
+
 # The filter-hours threshold is stored in steps of 500 h
 FILTER_HOURS_STEP = 500
 
@@ -87,6 +96,14 @@ BYPASS_MODES = {0: "auto", 1: "off", 2: "on"}
 
 class PureModbusError(Exception):
     """Raised when the Modbus exchange with the panel fails."""
+
+
+class PureModbusWriteIgnored(PureModbusError):
+    """Raised when the panel acknowledged a write but kept the old value.
+
+    The panel does this, without any error, for 60 s after every change made
+    from its web pages or (presumably) its touch screen.
+    """
 
 
 class PureModbus:
@@ -141,15 +158,10 @@ class PureModbus:
             except OSError:
                 pass
 
-    async def _read_holding(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-        address: int,
-        count: int,
-    ) -> tuple[int, ...]:
+    async def _exchange(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, pdu: bytes
+    ) -> bytes:
         self._transaction = (self._transaction + 1) & 0xFFFF
-        pdu = struct.pack(">BHH", FUNCTION_READ_HOLDING, address, count)
         writer.write(
             struct.pack(">HHHB", self._transaction, 0, len(pdu) + 1, self._unit_id) + pdu
         )
@@ -163,9 +175,76 @@ class PureModbus:
             raise PureModbusError("Modbus transaction id mismatch")
         if body[0] & 0x80:
             raise PureModbusError(f"Modbus exception code {body[1]}")
-        if body[0] != FUNCTION_READ_HOLDING or body[1] != count * 2:
+        if body[0] != pdu[0]:
+            raise PureModbusError("Unexpected Modbus response")
+        return body
+
+    async def _read_holding(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        address: int,
+        count: int,
+    ) -> tuple[int, ...]:
+        body = await self._exchange(
+            reader, writer, struct.pack(">BHH", FUNCTION_READ_HOLDING, address, count)
+        )
+        if body[1] != count * 2:
             raise PureModbusError("Unexpected Modbus response")
         return struct.unpack(f">{count}H", body[2 : 2 + count * 2])
+
+    async def write_register(
+        self, register: int, value: int, mask: int = 0xFFFF
+    ) -> int:
+        """Write ``value`` into the ``mask`` bits of a register; return the result.
+
+        A write response proves nothing on this panel: it acknowledges writes it
+        then drops. So the register is read before and after, and a value that
+        did not move raises ``PureModbusWriteIgnored``. The panel may also clamp
+        what it accepts (a speed of 10 becomes 20), hence "moved", not "equal".
+        """
+        async with self._lock:
+            try:
+                return await asyncio.wait_for(
+                    self._write_register(register, value, mask),
+                    timeout=REQUEST_TIMEOUT * 3,
+                )
+            except asyncio.TimeoutError as err:
+                raise PureModbusError(
+                    f"Timeout talking Modbus to {self._host}:{self._port}"
+                ) from err
+            except (OSError, asyncio.IncompleteReadError) as err:
+                raise PureModbusError(
+                    f"Modbus connection to {self._host}:{self._port} failed: {err}"
+                ) from err
+
+    async def _write_register(self, register: int, value: int, mask: int) -> int:
+        reader, writer = await asyncio.open_connection(self._host, self._port)
+        try:
+            (before,) = await self._read_holding(reader, writer, register - 1, 1)
+            wanted = (before & ~mask | value & mask) & 0xFFFF
+            if wanted == before:
+                return before
+            await self._exchange(
+                reader,
+                writer,
+                struct.pack(">BHH", FUNCTION_WRITE_SINGLE, register - 1, wanted),
+            )
+            await asyncio.sleep(WRITE_SETTLE_TIME)
+            (after,) = await self._read_holding(reader, writer, register - 1, 1)
+            if after == before:
+                raise PureModbusWriteIgnored(
+                    f"The unit ignored the write to register {register}; it refuses "
+                    "Modbus writes for 60 s after a change made from its own "
+                    "web page or touch panel"
+                )
+            return after
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                pass
 
     async def test_connection(self) -> bool:
         """True when the panel answers a register read. Used to detect Modbus."""
@@ -198,6 +277,18 @@ def _software_version(registers: dict[int, int]) -> str | None:
     if not year_month and not day_patch:
         return None
     return f"{year_month >> 8:02x}.{year_month & 0xFF:02x}.{day_patch >> 8:02x}.{day_patch & 0xFF:02x}"
+
+
+def _fan_speed_is_rpm(config_flags: int) -> bool:
+    """Whether registers 87/88 hold RPM rather than a percentage.
+
+    The manual ties it to the fan-alarm type in CONFIG_FLAGS_1, but some panels
+    leave that whole register at 0 while still reporting RPM from tacho fans
+    (seen on a Pure 250). So only an explicitly non-tacho configuration means %.
+    """
+    if config_flags == 0:
+        return True
+    return (config_flags >> 8 & 0b11) == FANS_FAIL_TACH
 
 
 def decode_registers(registers: dict[int, int]) -> dict[str, Any]:
@@ -265,8 +356,7 @@ def decode_registers(registers: dict[int, int]) -> dict[str, Any]:
         "anti_frost": _bit(status, STATUS_ANTI_FROST_ACTIVE),
         "fan_supply_speed": registers[REG_FAN_SUPPLY_SPEED],
         "fan_exhaust_speed": registers[REG_FAN_EXHAUST_SPEED],
-        "fan_speed_is_rpm": (registers[REG_CONFIG_FLAGS_1] >> 8 & 0b11)
-        == FANS_FAIL_TACH,
+        "fan_speed_is_rpm": _fan_speed_is_rpm(registers[REG_CONFIG_FLAGS_1]),
         "fan_hours": registers[REG_FAN_HOURS_HIGH] * 65536
         + registers[REG_FAN_HOURS_LOW],
         "filter_max_hours": registers[REG_FILTER_MAX_HOURS] * FILTER_HOURS_STEP,

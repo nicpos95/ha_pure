@@ -56,7 +56,16 @@ async def test_setup_over_modbus(
     assert hass.states.get("sensor.pure_vmc_fan_run_hours").state == "0"
     assert hass.states.get("sensor.pure_vmc_supply_fan_speed").state == "0"
     assert hass.states.get("sensor.pure_vmc_operating_mode").state == "off"
-    assert hass.states.get("sensor.pure_vmc_season").state == "summer"
+    assert hass.states.get("select.pure_vmc_season").state == "summer"
+    assert hass.states.get("select.pure_vmc_bypass_mode").state == "auto"
+    assert hass.states.get("number.pure_vmc_temperature_setpoint").state == "26.0"
+    assert hass.states.get("number.pure_vmc_boost_timer").state == "0"
+    assert (
+        hass.states.get("sensor.pure_vmc_supply_fan_speed").attributes[
+            "unit_of_measurement"
+        ]
+        == "rpm"
+    )
     assert hass.states.get("sensor.pure_vmc_filter_alarm_threshold").state == "2000"
     assert hass.states.get("binary_sensor.pure_vmc_anti_frost").state == "off"
     assert hass.states.get("binary_sensor.pure_vmc_fan_fault").state == "off"
@@ -113,6 +122,10 @@ async def test_setup_without_modbus(
     ] == "DirtyFilters"
     assert hass.states.get("sensor.pure_vmc_fan_run_hours") is None
     assert hass.states.get("binary_sensor.pure_vmc_fan_fault") is None
+    assert hass.states.get("select.pure_vmc_season") is None
+    assert hass.states.get("number.pure_vmc_boost_timer") is None
+    fan = hass.states.get("fan.pure_vmc_ventilation")
+    assert fan.attributes["preset_modes"] == ["normal", "boost"]
 
 
 async def test_options_flow(

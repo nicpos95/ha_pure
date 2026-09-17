@@ -6,6 +6,7 @@ import pytest
 from custom_components.pure.modbus import (
     PureModbus,
     PureModbusError,
+    PureModbusWriteIgnored,
     decode_registers,
 )
 
@@ -36,6 +37,27 @@ async def test_connection_refused(socket_enabled, unused_tcp_port: int) -> None:
         await client.read_registers()
 
 
+@pytest.mark.enable_socket
+async def test_write_register(panel: FakePanel, socket_enabled) -> None:
+    client = PureModbus("127.0.0.1", panel.port)
+    assert await client.write_register(51, 30) == 30
+    # The panel clamps: accepted, just not to the value that was asked for
+    assert await client.write_register(51, 10) == 20
+    # Only the masked bits change (season is bits 0-1 of register 20)
+    assert await client.write_register(20, 1, mask=0b11) == 33
+    # Writing what is already there is not a refusal
+    assert await client.write_register(20, 1, mask=0b11) == 33
+
+
+@pytest.mark.enable_socket
+async def test_write_ignored_during_lockout(panel: FakePanel, socket_enabled) -> None:
+    client = PureModbus("127.0.0.1", panel.port)
+    panel.locked_out = True
+    with pytest.raises(PureModbusWriteIgnored):
+        await client.write_register(51, 30)
+    assert panel.registers[51] == 0
+
+
 def test_decode_live_capture() -> None:
     data = decode_registers(_registers())
     assert data["speed"] == 0
@@ -50,7 +72,8 @@ def test_decode_live_capture() -> None:
     assert data["bypass_mode"] == "auto"
     assert data["fan_hours"] == 0
     assert data["filter_max_hours"] == 2000
-    assert data["fan_speed_is_rpm"] is False
+    # This unit leaves CONFIG_FLAGS_1 at 0 and still reports RPM
+    assert data["fan_speed_is_rpm"] is True
     assert data["sw_version"] == "25.01.09.00"
 
 
@@ -73,6 +96,8 @@ def test_decode_running_unit() -> None:
     assert data["season"] == "winter"
     assert data["bypass_mode"] == "on"
     assert data["alarm_active"] is False
+    # An explicitly non-tacho fan alarm means the speeds are percentages
+    assert decode_registers(_registers(r7=1 << 8))["fan_speed_is_rpm"] is False
 
 
 def test_decode_faults_and_boost() -> None:
