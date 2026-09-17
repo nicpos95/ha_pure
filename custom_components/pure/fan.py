@@ -141,7 +141,9 @@ class PureFan(PureEntity, FanEntity):
         current = self.coordinator.data.get("speed", 0)
         if self.coordinator.modbus is not None:
             try:
-                await self.coordinator.async_write_register(REG_SPEED_SETPOINT, target)
+                await self.coordinator.async_write_register(
+                    REG_SPEED_SETPOINT, target, retry=False
+                )
                 return
             except PureModbusError as err:
                 _LOGGER.debug("Setting the speed over the web page instead: %s", err)

@@ -129,6 +129,18 @@ MODBUS_SENSORS: tuple[PureSensorDescription, ...] = (
 )
 
 
+# Shown instead of the bypass mode select on units that do not let it be chosen
+BYPASS_MODE_SENSOR = PureSensorDescription(
+    key="bypass_mode",
+    data_key="bypass_mode",
+    translation_key="bypass_mode",
+    device_class=SensorDeviceClass.ENUM,
+    options=["auto", "off", "on"],
+    entity_category=EntityCategory.DIAGNOSTIC,
+    icon="mdi:valve",
+)
+
+
 def _fan_speed_sensors(is_rpm: bool) -> tuple[PureSensorDescription, ...]:
     """The measured fan speeds: RPM when the fans have a tacho signal, else %."""
     return tuple(
@@ -164,6 +176,10 @@ async def async_setup_entry(
         is_rpm = bool(coordinator.data.get("fan_speed_is_rpm"))
         for desc in (*_fan_speed_sensors(is_rpm), *MODBUS_SENSORS):
             entities.append(PureValueSensor(coordinator, entry.entry_id, desc))
+        if not coordinator.data.get("bypass_mode_selectable"):
+            entities.append(
+                PureValueSensor(coordinator, entry.entry_id, BYPASS_MODE_SENSOR)
+            )
 
     async_add_entities(entities)
 

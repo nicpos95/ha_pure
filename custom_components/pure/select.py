@@ -61,7 +61,12 @@ async def async_setup_entry(
     if coordinator.modbus is None:
         return
     async_add_entities(
-        PureSelect(coordinator, entry.entry_id, description) for description in SELECTS
+        PureSelect(coordinator, entry.entry_id, description)
+        for description in SELECTS
+        # The unit ignores the bypass mode unless its bypass is a "universal"
+        # one; it is then shown as a sensor instead of a control that does nothing.
+        if description.key != "bypass_mode"
+        or coordinator.data.get("bypass_mode_selectable")
     )
 
 

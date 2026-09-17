@@ -1,12 +1,17 @@
 """Commands: over Modbus, with the web page as the fan's fallback."""
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.pure.const import CONF_HOST, DOMAIN
@@ -21,6 +26,7 @@ FAN = "fan.pure_vmc_ventilation"
 
 @pytest.fixture
 async def entry(hass: HomeAssistant, panel: FakePanel, socket_enabled) -> MockConfigEntry:
+    panel.registers[7] = 2 << 8 | 2 << 10  # tacho fans, "universal" bypass
     entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: HOST})
     entry.add_to_hass(hass)
     with _modbus_on(panel):
@@ -105,12 +111,53 @@ async def test_selects_and_numbers(
     assert panel.registers[53] == 600
 
 
-async def test_refused_write_is_reported(
+async def test_dropped_write_is_retried(
     hass: HomeAssistant, panel: FakePanel, entry: MockConfigEntry
 ) -> None:
     panel.locked_out = True
-    with pytest.raises(HomeAssistantError, match="60 s"):
+    await _call(
+        hass, "select", "select_option", entity_id="select.pure_vmc_season", option="winter"
+    )
+    # No error for the user, nothing changed on the unit yet
+    assert panel.registers[20] == 34
+    assert hass.states.get("select.pure_vmc_season").state == "summer"
+
+    # Still locked out at the first retry, accepted at the second
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=16))
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert panel.registers[20] == 34
+
+    panel.locked_out = False
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=32))
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert panel.registers[20] == 33
+    assert hass.states.get("select.pure_vmc_season").state == "winter"
+
+
+async def test_newer_command_replaces_a_waiting_one(
+    hass: HomeAssistant, panel: FakePanel, entry: MockConfigEntry
+) -> None:
+    panel.locked_out = True
+    await _call(
+        hass, "number", "set_value", entity_id="number.pure_vmc_temperature_setpoint", value=22
+    )
+    panel.locked_out = False
+    await _call(
+        hass, "number", "set_value", entity_id="number.pure_vmc_temperature_setpoint", value=24
+    )
+    assert panel.registers[52] == 240
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=16))
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert panel.registers[52] == 240  # the 22 degrees that was waiting is gone
+
+
+async def test_unreachable_unit_is_reported(
+    hass: HomeAssistant, panel: FakePanel, entry: MockConfigEntry
+) -> None:
+    await panel.stop()
+    with pytest.raises(HomeAssistantError):
         await _call(
             hass, "select", "select_option", entity_id="select.pure_vmc_season", option="winter"
         )
-    assert panel.registers[20] == 34
+    await panel.start()  # so the fixture can stop it again

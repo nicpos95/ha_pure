@@ -76,6 +76,10 @@ STATUS_ANTI_FROST_ACTIVE = 4
 # CONFIG_FLAGS_1 (register 7): bits 8-9 == 2 means the fans report a tacho signal
 FANS_FAIL_TACH = 2
 
+# CONFIG_FLAGS_1 (register 7): bits 10-11 == 2 means a "universal" bypass, the
+# only kind whose mode (auto/off/on) can be chosen; otherwise the unit ignores it
+BYPASS_UNIVERSAL_ON_OFF = 2
+
 # PARAMETER_FLAGS (register 20): season in bits 0-1, bypass mode in bits 2-3
 SEASON_MASK = 0b0011
 BYPASS_MODE_MASK = 0b1100
@@ -362,6 +366,8 @@ def decode_registers(registers: dict[int, int]) -> dict[str, Any]:
         "filter_max_hours": registers[REG_FILTER_MAX_HOURS] * FILTER_HOURS_STEP,
         "season": SEASONS.get(parameters & 0b11),
         "bypass_mode": BYPASS_MODES.get(parameters >> 2 & 0b11),
+        "bypass_mode_selectable": (registers[REG_CONFIG_FLAGS_1] >> 10 & 0b11)
+        == BYPASS_UNIVERSAL_ON_OFF,
         "operating_mode": operating_mode,
         "boost_remaining": boost_remaining,
         "sw_version": _software_version(registers),

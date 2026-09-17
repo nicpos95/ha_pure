@@ -57,7 +57,9 @@ async def test_setup_over_modbus(
     assert hass.states.get("sensor.pure_vmc_supply_fan_speed").state == "0"
     assert hass.states.get("sensor.pure_vmc_operating_mode").state == "off"
     assert hass.states.get("select.pure_vmc_season").state == "summer"
-    assert hass.states.get("select.pure_vmc_bypass_mode").state == "auto"
+    # This unit's bypass is not a "universal" one: its mode is shown, not offered
+    assert hass.states.get("sensor.pure_vmc_bypass_mode").state == "auto"
+    assert hass.states.get("select.pure_vmc_bypass_mode") is None
     assert hass.states.get("number.pure_vmc_temperature_setpoint").state == "26.0"
     assert hass.states.get("number.pure_vmc_boost_timer").state == "0"
     assert (

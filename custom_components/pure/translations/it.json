@@ -74,6 +74,14 @@
       },
       "filter_max_hours": {
         "name": "Soglia Allarme Filtri"
+      },
+      "bypass_mode": {
+        "name": "Modalità Bypass",
+        "state": {
+          "auto": "Automatico",
+          "off": "Chiuso",
+          "on": "Aperto"
+        }
       }
     },
     "binary_sensor": {

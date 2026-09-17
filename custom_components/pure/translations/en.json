@@ -74,6 +74,14 @@
       },
       "filter_max_hours": {
         "name": "Filter Alarm Threshold"
+      },
+      "bypass_mode": {
+        "name": "Bypass Mode",
+        "state": {
+          "auto": "Automatic",
+          "off": "Closed",
+          "on": "Open"
+        }
       }
     },
     "binary_sensor": {

@@ -85,7 +85,7 @@ Create solo se l'unità risponde su Modbus TCP (porta 502).
 | `sensor` | Boost Time Remaining | Secondi rimanenti del booster |
 | `sensor` | Operating Mode | `off` / `manual` / `schedule` (Orologio) / `auto` / `boost` |
 | `select` | Season | Stagione (`auto` / `winter` / `summer`) — **modificabile** |
-| `select` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`) — **modificabile** |
+| `select` / `sensor` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`). **Modificabile** solo se il bypass è configurato come *universale* (menù Fabbrica): altrimenti l'unità ignora l'impostazione, e viene mostrata come sensore diagnostico |
 | `number` | Temperature Setpoint | Set-point temperatura, passi di 0,2 °C — **modificabile** |
 | `number` | Boost Timer | Minuti di booster: impostarlo avvia il booster, 0 lo annulla |
 | `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
@@ -116,11 +116,19 @@ Due particolarità del pannello, verificate su una Pure 250:
 
 - **Conferma le scritture anche quando le scarta.** Per 60 secondi dopo ogni modifica fatta dalla pagina
   web (o dal touch) risponde "ok" e lascia il valore com'era. L'integrazione rilegge quindi ogni registro
-  dopo averlo scritto: se il valore non si è mosso, la ventola ripiega sull'interfaccia web, mentre le
-  altre entità segnalano l'errore (riprovare dopo un minuto).
+  dopo averlo scritto. Se il valore non si è mosso, la ventola ripiega subito sull'interfaccia web; per le
+  altre entità il comando resta in coda e viene riprovato ogni 15 secondi (fino a 3 minuti) finché
+  l'unità lo accetta — nel frattempo l'entità mostra ancora il valore reale.
 - **Le scritture Modbus non sono salvate in memoria permanente**: secondo il manuale, allo spegnimento
   l'unità torna ai valori impostati da pannello o da web. Dopo un'interruzione di corrente Home Assistant
   mostrerà quindi lo stato reale dell'unità, non l'ultimo comando inviato.
+
+## Diagnostica
+
+Da **Impostazioni → Dispositivi e servizi → Pure VMC → Scarica diagnostica** si ottiene lo stato
+decodificato insieme ai registri Modbus grezzi (l'indirizzo IP viene oscurato). Le varianti di queste unità
+differiscono nella configurazione: allegare il file a una segnalazione permette di capire cosa riporta
+l'unità senza dover eseguire script.
 
 ## Test
 
