@@ -45,6 +45,11 @@ _LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 10  # seconds
 
+# The unit runs a tiny single-threaded web server; cap in-flight requests so a
+# poll cannot overwhelm it. Beyond a handful of parallel connections it starts
+# dropping them, which would surface as transient "unknown" states.
+MAX_CONCURRENT_REQUESTS = 3
+
 
 class PureApiError(Exception):
     """Raised when communication with the device fails."""
@@ -60,6 +65,7 @@ class PureApi:
             host = f"http://{host}"
         self._base = host
         self._session = session
+        self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
     # ------------------------------------------------------------------
     # Low-level helpers
@@ -68,7 +74,9 @@ class PureApi:
     async def _get(self, endpoint: str) -> str:
         url = f"{self._base}{endpoint}"
         try:
-            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)) as resp:
+            async with self._semaphore, self._session.get(
+                url, timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            ) as resp:
                 resp.raise_for_status()
                 return await resp.text()
         except asyncio.TimeoutError as err:
@@ -80,7 +88,7 @@ class PureApi:
         url = f"{self._base}{endpoint}"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         try:
-            async with self._session.post(
+            async with self._semaphore, self._session.post(
                 url,
                 data=payload,
                 headers=headers,
