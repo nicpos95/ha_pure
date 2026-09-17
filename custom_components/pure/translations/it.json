@@ -16,6 +16,17 @@
       "already_configured": "Questo dispositivo è già configurato."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pure VMC",
+        "description": "Modbus TCP restituisce più dati delle pagine web (velocità dei ventilatori, ore di funzionamento, singoli allarmi) con una sola breve richiesta. Viene usato solo se l'unità risponde sulla porta 502.",
+        "data": {
+          "modbus": "Leggi l'unità tramite Modbus TCP"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "temp_external": {
@@ -38,6 +49,47 @@
       },
       "temp_setpoint": {
         "name": "Temperatura Impostata"
+      },
+      "fan_supply_speed": {
+        "name": "Velocità Ventilatore Immissione"
+      },
+      "fan_exhaust_speed": {
+        "name": "Velocità Ventilatore Ripresa"
+      },
+      "fan_hours": {
+        "name": "Ore Ventilatori"
+      },
+      "boost_remaining": {
+        "name": "Tempo Booster Rimanente"
+      },
+      "operating_mode": {
+        "name": "Modalità di Funzionamento",
+        "state": {
+          "off": "Spento",
+          "manual": "Manuale",
+          "schedule": "Programma settimanale",
+          "auto": "Automatico",
+          "boost": "Booster"
+        }
+      },
+      "season": {
+        "name": "Stagione",
+        "state": {
+          "auto": "Automatica",
+          "winter": "Inverno",
+          "summer": "Estate"
+        }
+      },
+      "bypass_mode": {
+        "name": "Modalità Bypass",
+        "state": {
+          "auto": "Automatico",
+          "off": "Spento",
+          "on": "Acceso"
+        }
+      },
+      "filter_max_hours": {
+        "name": "Soglia Allarme Filtri"
       }
     },
     "binary_sensor": {
@@ -49,6 +101,33 @@
       },
       "bypass": {
         "name": "Bypass"
+      },
+      "anti_frost": {
+        "name": "Antigelo"
+      },
+      "fault_communication": {
+        "name": "Guasto Comunicazione"
+      },
+      "fault_configuration": {
+        "name": "Errore di Configurazione"
+      },
+      "fault_temp_external": {
+        "name": "Guasto Sonda Esterna"
+      },
+      "fault_temp_return": {
+        "name": "Guasto Sonda Ripresa"
+      },
+      "fault_temp_exhaust": {
+        "name": "Guasto Sonda Espulsione"
+      },
+      "fault_temp_inlet": {
+        "name": "Guasto Sonda Immissione"
+      },
+      "fault_fans": {
+        "name": "Guasto Ventilatori"
+      },
+      "fault_anti_frost": {
+        "name": "Allarme Antigelo"
       }
     },
     "fan": {

@@ -12,7 +12,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import (
+    PERCENTAGE,
+    REVOLUTIONS_PER_MINUTE,
+    EntityCategory,
+    UnitOfTemperature,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -82,6 +88,80 @@ SETPOINT_SENSOR = PureSensorDescription(
 )
 
 
+# Values only Modbus reports; created only when the unit is read over Modbus.
+# The two fan speeds are described separately because their unit depends on
+# how the unit is built (see ``_fan_speed_sensors``).
+MODBUS_SENSORS: tuple[PureSensorDescription, ...] = (
+    PureSensorDescription(
+        key="fan_hours",
+        data_key="fan_hours",
+        translation_key="fan_hours",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        icon="mdi:timer-outline",
+    ),
+    PureSensorDescription(
+        key="boost_remaining",
+        data_key="boost_remaining",
+        translation_key="boost_remaining",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        icon="mdi:fan-clock",
+    ),
+    PureSensorDescription(
+        key="operating_mode",
+        data_key="operating_mode",
+        translation_key="operating_mode",
+        device_class=SensorDeviceClass.ENUM,
+        options=["off", "manual", "schedule", "auto", "boost"],
+        icon="mdi:hvac",
+    ),
+    PureSensorDescription(
+        key="season",
+        data_key="season",
+        translation_key="season",
+        device_class=SensorDeviceClass.ENUM,
+        options=["auto", "winter", "summer"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:sun-snowflake-variant",
+    ),
+    PureSensorDescription(
+        key="bypass_mode",
+        data_key="bypass_mode",
+        translation_key="bypass_mode",
+        device_class=SensorDeviceClass.ENUM,
+        options=["auto", "off", "on"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:valve",
+    ),
+    PureSensorDescription(
+        key="filter_max_hours",
+        data_key="filter_max_hours",
+        translation_key="filter_max_hours",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:air-filter",
+    ),
+)
+
+
+def _fan_speed_sensors(is_rpm: bool) -> tuple[PureSensorDescription, ...]:
+    """The measured fan speeds: RPM when the fans have a tacho signal, else %."""
+    return tuple(
+        PureSensorDescription(
+            key=key,
+            data_key=key,
+            translation_key=key,
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement=REVOLUTIONS_PER_MINUTE if is_rpm else PERCENTAGE,
+            icon="mdi:fan",
+        )
+        for key in ("fan_supply_speed", "fan_exhaust_speed")
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -92,21 +172,26 @@ async def async_setup_entry(
     entities: list[PureEntity] = []
 
     for desc in TEMPERATURE_SENSORS:
-        entities.append(PureTemperatureSensor(coordinator, entry.entry_id, desc))
+        entities.append(PureValueSensor(coordinator, entry.entry_id, desc))
 
-    entities.append(PureTemperatureSensor(coordinator, entry.entry_id, SETPOINT_SENSOR))
+    entities.append(PureValueSensor(coordinator, entry.entry_id, SETPOINT_SENSOR))
     entities.append(PureSpeedSensor(coordinator, entry.entry_id))
     entities.append(PureEfficiencySensor(coordinator, entry.entry_id))
+
+    if coordinator.modbus is not None:
+        is_rpm = bool(coordinator.data.get("fan_speed_is_rpm"))
+        for desc in (*_fan_speed_sensors(is_rpm), *MODBUS_SENSORS):
+            entities.append(PureValueSensor(coordinator, entry.entry_id, desc))
 
     async_add_entities(entities)
 
 
 # ---------------------------------------------------------------------------
-# Temperature sensors
+# Plain value sensors (temperatures and the Modbus-only readings)
 # ---------------------------------------------------------------------------
 
-class PureTemperatureSensor(PureEntity, SensorEntity):
-    """One of the four temperature measurement points."""
+class PureValueSensor(PureEntity, SensorEntity):
+    """A sensor that reports one coordinator value as-is."""
 
     entity_description: PureSensorDescription
 
@@ -121,7 +206,7 @@ class PureTemperatureSensor(PureEntity, SensorEntity):
         self._attr_unique_id = f"{entry_id}_{description.key}"
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | int | str | None:
         return self.coordinator.data.get(self.entity_description.data_key)
 
 
@@ -174,8 +259,9 @@ class PureEfficiencySensor(PureEntity, SensorEntity):
     Formula (cooling mode): η = (T_external - T_inlet) / (T_external - T_return) × 100
 
     Clamped to [0, 100].
-    Only computed when speed > 0 and not in timer mode (to avoid division issues
-    when the fan is off or running an unknown schedule).
+    Only computed while the fans run. Over Modbus that is the measured supply
+    fan speed; from the web pages only the set-point is known, so timer mode
+    (running an unknown schedule) is skipped as well.
     """
 
     _attr_translation_key = "heat_recovery_efficiency"
@@ -193,8 +279,11 @@ class PureEfficiencySensor(PureEntity, SensorEntity):
         data = self.coordinator.data
         speed = data.get("speed", 0)
 
+        if "fan_supply_speed" in data:
+            if not data["fan_supply_speed"]:
+                return None
         # Don't compute when off or in timer mode (speed unknown)
-        if speed == 0 or speed == SPEED_TIMER_MODE:
+        elif speed == 0 or speed == SPEED_TIMER_MODE:
             return None
 
         t_ext = data.get("temp_external")

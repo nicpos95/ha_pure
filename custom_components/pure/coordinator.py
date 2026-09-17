@@ -10,15 +10,25 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import PureApi, PureApiError
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .modbus import PureModbus, PureModbusError, decode_registers
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Single coordinator shared by all Pure VMC entities."""
+    """Single coordinator shared by all Pure VMC entities.
 
-    def __init__(self, hass: HomeAssistant, api: PureApi) -> None:
+    State is read over Modbus TCP when the unit offers it: one short exchange
+    returns far more than the web pages do and leaves the unit's small web
+    server alone. The web pages remain the fallback, and the only command path.
+    """
+
+    def __init__(
+        self, hass: HomeAssistant, api: PureApi, modbus: PureModbus | None = None
+    ) -> None:
         self.api = api
+        self.modbus = modbus
+        self._modbus_failing = False
         super().__init__(
             hass,
             _LOGGER,
@@ -28,6 +38,21 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch all data from the device in one go."""
+        if self.modbus is not None:
+            try:
+                data = decode_registers(await self.modbus.read_registers())
+            except PureModbusError as err:
+                if not self._modbus_failing:
+                    _LOGGER.warning(
+                        "Modbus read failed, falling back to the web pages: %s", err
+                    )
+                    self._modbus_failing = True
+            else:
+                if self._modbus_failing:
+                    _LOGGER.info("Modbus is answering again")
+                    self._modbus_failing = False
+                return data
+
         try:
             return await self.api.get_all()
         except PureApiError as err:

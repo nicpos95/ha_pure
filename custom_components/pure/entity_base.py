@@ -24,4 +24,6 @@ class PureEntity(CoordinatorEntity[PureCoordinator]):
             name="Pure VMC",
             manufacturer="Pure",
             model="Pure VMC",
+            # Only known when the unit is read over Modbus
+            sw_version=self.coordinator.data.get("sw_version"),
         )

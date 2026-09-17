@@ -16,6 +16,17 @@
       "already_configured": "This device is already configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pure VMC",
+        "description": "Modbus TCP returns more data than the web pages (fan speeds, run hours, individual alarms) with a single short request. It is used only when the unit answers on port 502.",
+        "data": {
+          "modbus": "Read the unit over Modbus TCP"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "temp_external": {
@@ -38,6 +49,47 @@
       },
       "temp_setpoint": {
         "name": "Temperature Setpoint"
+      },
+      "fan_supply_speed": {
+        "name": "Supply Fan Speed"
+      },
+      "fan_exhaust_speed": {
+        "name": "Exhaust Fan Speed"
+      },
+      "fan_hours": {
+        "name": "Fan Run Hours"
+      },
+      "boost_remaining": {
+        "name": "Boost Time Remaining"
+      },
+      "operating_mode": {
+        "name": "Operating Mode",
+        "state": {
+          "off": "Off",
+          "manual": "Manual",
+          "schedule": "Weekly schedule",
+          "auto": "Automatic",
+          "boost": "Boost"
+        }
+      },
+      "season": {
+        "name": "Season",
+        "state": {
+          "auto": "Automatic",
+          "winter": "Winter",
+          "summer": "Summer"
+        }
+      },
+      "bypass_mode": {
+        "name": "Bypass Mode",
+        "state": {
+          "auto": "Automatic",
+          "off": "Off",
+          "on": "On"
+        }
+      },
+      "filter_max_hours": {
+        "name": "Filter Alarm Threshold"
       }
     },
     "binary_sensor": {
@@ -49,6 +101,33 @@
       },
       "bypass": {
         "name": "Bypass"
+      },
+      "anti_frost": {
+        "name": "Anti-Frost"
+      },
+      "fault_communication": {
+        "name": "Communication Fault"
+      },
+      "fault_configuration": {
+        "name": "Configuration Fault"
+      },
+      "fault_temp_external": {
+        "name": "External Temperature Probe Fault"
+      },
+      "fault_temp_return": {
+        "name": "Return Temperature Probe Fault"
+      },
+      "fault_temp_exhaust": {
+        "name": "Exhaust Temperature Probe Fault"
+      },
+      "fault_temp_inlet": {
+        "name": "Inlet Temperature Probe Fault"
+      },
+      "fault_fans": {
+        "name": "Fan Fault"
+      },
+      "fault_anti_frost": {
+        "name": "Anti-Frost Alarm"
       }
     },
     "fan": {

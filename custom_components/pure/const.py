@@ -6,6 +6,10 @@ DEFAULT_SCAN_INTERVAL = 30  # seconds
 # Config entry keys
 CONF_HOST = "host"
 
+# Options: read the unit over Modbus TCP when it answers (web scraping otherwise)
+CONF_MODBUS = "modbus"
+DEFAULT_MODBUS = True
+
 # Endpoints
 ENDPOINT_SPEED = "/ifspeed_sp.html"
 ENDPOINT_TEMP_EXTERNAL = "/iftemp_e.html"

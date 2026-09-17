@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SPEED_MAX, SPEED_MIN, SPEED_OFF, SPEED_TIMER_MODE
+from .const import DOMAIN, SPEED_MAX, SPEED_MIN, SPEED_OFF
 from .coordinator import PureCoordinator
 from .entity_base import PureEntity
 
@@ -70,9 +70,9 @@ class PureFan(PureEntity, FanEntity):
         speed = self.coordinator.data.get("speed")
         if speed is None:
             return None
-        if speed == SPEED_TIMER_MODE:
-            # Timer mode: we report 100 so automations using percentage
-            # don't get confused by the out-of-range 101 value.
+        if speed > SPEED_MAX:
+            # Timer mode (101) or auto mode (102): we report 100 so automations
+            # using percentage don't get confused by the out-of-range value.
             # The timer_mode attribute on the speed sensor is the precise indicator.
             return 100
         return speed
