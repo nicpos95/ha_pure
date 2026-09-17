@@ -13,6 +13,12 @@ ENDPOINT_TEMP_RETURN = "/iftemp_r.html"
 ENDPOINT_TEMP_EXHAUST = "/iftemp_x.html"
 ENDPOINT_TEMP_INLET = "/iftemp_i.html"
 
+# Home-screen status fragments (read-only, no menu navigation required)
+ENDPOINT_ALARM_BANNER = "/ifalarms.html"    # current active-alarm text, e.g. "DirtyFilters"
+ENDPOINT_ALARM_ICON = "/if7834.html"        # alarm indicator image (any alarm active)
+ENDPOINT_BYPASS = "/if5523.html"            # bypass indicator image (free-cooling damper)
+ENDPOINT_TEMP_SETPOINT = "/iftemp_sp.html"  # target temperature for the bypass logic
+
 # POST payloads
 PAYLOAD_SPEED_UP_TEN = "iic0001.x=1&iic0001.y=1"
 PAYLOAD_SPEED_DOWN_TEN = "ddc0001.x=1&ddc0001.y=1"
@@ -34,6 +40,15 @@ REGEX_TEMP_EXTERNAL = r"<h3>Te\s+(\d+\.\d+)\s*</h3>"
 REGEX_TEMP_RETURN = r"<h3>Tr\s+(\d+\.\d+)\s*</h3>"
 REGEX_TEMP_EXHAUST = r"<h3>Tx\s+(\d+\.\d+)\s*</h3>"
 REGEX_TEMP_INLET = r"<h3>Ti\s+(\d+\.\d+)\s*</h3>"
+
+# Home-screen status patterns
+REGEX_ALARM_BANNER = r"<h2[^>]*>([^<]*)</h2>"        # captures the alarm text (may be empty)
+REGEX_ALARM_ICON = r"img7834_alarms_(on|off)"        # "on" => an alarm is active
+REGEX_BYPASS = r"img5523_bypass_(on|off)"            # "on" => bypass (free-cooling) open
+REGEX_TEMP_SETPOINT = r"<h2[^>]*>\s*(\d+\.\d+)\s*</h2>"
+
+# Substring (case-insensitive) that marks the dirty-filter warning in the alarm banner
+ALARM_FILTER_MARKER = "dirtyfilter"
 
 # Temperature sensor identifiers
 TEMP_EXTERNAL = "temp_external"

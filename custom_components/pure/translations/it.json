@@ -35,6 +35,20 @@
       },
       "heat_recovery_efficiency": {
         "name": "Efficienza Recupero Calore"
+      },
+      "temp_setpoint": {
+        "name": "Temperatura Impostata"
+      }
+    },
+    "binary_sensor": {
+      "filter": {
+        "name": "Filtro"
+      },
+      "alarm": {
+        "name": "Allarme"
+      },
+      "bypass": {
+        "name": "Bypass"
       }
     },
     "fan": {

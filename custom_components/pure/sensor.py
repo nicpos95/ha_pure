@@ -69,6 +69,19 @@ TEMPERATURE_SENSORS: tuple[PureSensorDescription, ...] = (
 )
 
 
+# The target temperature that drives the bypass (free-cooling) logic. It is a
+# set-point rather than a measurement point, so it is kept out of the tuple above.
+SETPOINT_SENSOR = PureSensorDescription(
+    key="temp_setpoint",
+    data_key="temp_setpoint",
+    translation_key="temp_setpoint",
+    device_class=SensorDeviceClass.TEMPERATURE,
+    state_class=SensorStateClass.MEASUREMENT,
+    native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+    suggested_display_precision=1,
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -81,6 +94,7 @@ async def async_setup_entry(
     for desc in TEMPERATURE_SENSORS:
         entities.append(PureTemperatureSensor(coordinator, entry.entry_id, desc))
 
+    entities.append(PureTemperatureSensor(coordinator, entry.entry_id, SETPOINT_SENSOR))
     entities.append(PureSpeedSensor(coordinator, entry.entry_id))
     entities.append(PureEfficiencySensor(coordinator, entry.entry_id))
 
