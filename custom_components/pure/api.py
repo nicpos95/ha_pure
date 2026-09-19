@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 import aiohttp
+from yarl import URL
 
 from .const import (
     ALARM_FILTER_MARKER,
@@ -64,6 +65,8 @@ class PureApi:
         if not host.startswith("http://") and not host.startswith("https://"):
             host = f"http://{host}"
         self._base = host
+        # Bare host, without scheme or port, for the Modbus connection
+        self.hostname = URL(host).host or host
         self._session = session
         self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 

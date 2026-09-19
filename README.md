@@ -2,7 +2,9 @@
 
 Integrazione Home Assistant per la ventilazione meccanica controllata (VMC) Pure.
 
-Comunica direttamente con l'interfaccia web dell'unità tramite HTTP locale — nessun cloud richiesto.
+Comunica direttamente con l'unità in rete locale — nessun cloud richiesto. Lo stato viene letto via
+**Modbus TCP** quando il pannello lo offre (porta 502), altrimenti dalle pagine web. Con il Modbus
+attivo anche i comandi passano da lì (con l'interfaccia web come riserva per la ventola).
 Compatibile con Pure 250 e altri modelli della serie Pure il cui comando touch è dotato di porta ethernet RJ45.
 
 ## Funzionalità
@@ -11,6 +13,10 @@ Compatibile con Pure 250 e altri modelli della serie Pure il cui comando touch �
 - **4 sensori di temperatura** — Esterna (Te), Ripresa (Tr), Espulsione (Tx), Immissione (Ti).
 - **Sensore velocità** — Percentuale corrente + modalità timer (Orologio).
 - **Efficienza recupero calore** — Calcolata automaticamente in %.
+- **Allarmi e stato** — Filtri sporchi, allarme generico, bypass free-cooling, set-point temperatura.
+- **Via Modbus TCP** — Velocità reale dei due ventilatori, ore di funzionamento, singoli allarmi
+  (sonde, ventilatori, comunicazione, configurazione, antigelo), modalità di funzionamento, stagione,
+  modalità bypass, soglia ore filtri, versione firmware.
 - **Config flow** — Aggiungi tramite UI → "Pure VMC".
 
 ## Installazione
@@ -64,8 +70,78 @@ Inserisci l'indirizzo IP dell'unità (es. `192.168.1.243`). L'integrazione teste
 | `binary_sensor` | Alarm | Un qualsiasi allarme attivo — `problem` |
 | `binary_sensor` | Bypass | Bypass free-cooling aperto |
 
-Tutte le entità sono in sola lettura e vengono lette dalle pagine della schermata
+Queste entità sono sempre disponibili. Senza Modbus vengono lette dalle pagine della schermata
 principale, senza navigare i menu dell'unità (quindi il pannello a muro non viene disturbato).
+
+### Entità aggiuntive via Modbus TCP
+
+Create solo se l'unità risponde su Modbus TCP (porta 502).
+
+| Platform | Nome | Descrizione |
+|----------|------|-------------|
+| `sensor` | Supply Fan Speed | Velocità reale ventilatore di immissione (RPM con segnale tachimetrico, altrimenti %) |
+| `sensor` | Exhaust Fan Speed | Velocità reale ventilatore di ripresa |
+| `sensor` | Fan Run Hours | Ore di funzionamento dell'unità |
+| `sensor` | Boost Time Remaining | Secondi rimanenti del booster |
+| `sensor` | Operating Mode | `off` / `manual` / `schedule` (Orologio) / `auto` / `boost` |
+| `select` | Season | Stagione (`auto` / `winter` / `summer`) — **modificabile** |
+| `select` / `sensor` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`). **Modificabile** solo se il bypass è configurato come *universale* (menù Fabbrica): altrimenti l'unità ignora l'impostazione, e viene mostrata come sensore diagnostico |
+| `number` | Temperature Setpoint | Set-point temperatura, passi di 0,2 °C — **modificabile** |
+| `number` | Boost Timer | Minuti di booster: impostarlo avvia il booster, 0 lo annulla |
+| `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
+| `binary_sensor` | Anti-Frost | Antigelo scambiatore attivo |
+| `binary_sensor` | … Fault (×8) | Le singole voci della schermata Allarmi: comunicazione, configurazione, sonde Te/Tr/Tx/Ti, ventilatori, antigelo — `problem`, diagnostica |
+
+## Modbus TCP
+
+Il pannello touch con porta ethernet (EVO-PH / X511) espone tutto lo stato come *holding registers*.
+Un'unica breve connessione per ciclo restituisce più dati di nove pagine web e non carica il piccolo
+web server dell'unità. Il Modbus viene rilevato da solo all'avvio: se il pannello è impostato su RS485
+(menu Installatore → Comunicazione → Modbus) o non risponde, l'integrazione continua a leggere le pagine
+web come prima, e fa lo stesso per il singolo ciclo in cui il Modbus dovesse mancare. Si può disattivare
+da **Configura** nella scheda dell'integrazione.
+
+Dettagli: TCP 502, funzione 03, l'indirizzo sul filo è il numero di registro del manuale meno 1, e il
+pannello chiude la connessione dopo 10 s senza accessi (per questo se ne apre una per ciclo). Nessuna
+dipendenza esterna: il client è incluso (`modbus.py`).
+
+### Comandi via Modbus
+
+Con il Modbus attivo la ventola si comanda scrivendo direttamente il set-point di velocità (una sola
+scrittura invece di una serie di pressioni sui tasti +/- della pagina web), e il preset **schedule**
+rimette l'unità sul programma settimanale (Orologio). Il preset **boost** avvia 15 minuti di booster;
+per una durata diversa usare *Boost Timer*.
+
+Due particolarità del pannello, verificate su una Pure 250:
+
+- **Conferma le scritture anche quando le scarta.** Per 60 secondi dopo ogni modifica fatta dalla pagina
+  web (o dal touch) risponde "ok" e lascia il valore com'era. L'integrazione rilegge quindi ogni registro
+  dopo averlo scritto. Se il valore non si è mosso, la ventola ripiega subito sull'interfaccia web; per le
+  altre entità il comando resta in coda e viene riprovato ogni 15 secondi (fino a 3 minuti) finché
+  l'unità lo accetta — nel frattempo l'entità mostra ancora il valore reale.
+- **Le scritture Modbus da sole sono temporanee.** Un valore scritto via Modbus torna a quello salvato
+  da pannello/web dopo circa un minuto senza accessi ai registri (misurato: tra 45 e 100 secondi): basta
+  un riavvio di Home Assistant, e una ventola spenta da Home Assistant ripartirebbe alla velocità
+  impostata l'ultima volta da pannello. Per questo, dopo ogni scrittura riuscita, l'integrazione chiede
+  all'unità di **salvare il valore in memoria permanente** (registro 5: bit 14 per la configurazione, bit 15
+  per i set-point — la stessa cosa che fa la pagina web dell'unità a ogni modifica). Verificato: i valori
+  restano dopo oltre due minuti senza alcun accesso. Fa eccezione il booster, che è un conto alla
+  rovescia e non viene salvato. Chi automatizza la velocità con cambi molto frequenti tenga presente che
+  ogni cambio è una scrittura sulla memoria non volatile dell'unità, come lo sarebbe dal pannello.
+
+## Diagnostica
+
+Da **Impostazioni → Dispositivi e servizi → Pure VMC → Scarica diagnostica** si ottiene lo stato
+decodificato insieme ai registri Modbus grezzi (l'indirizzo IP viene oscurato). Le varianti di queste unità
+differiscono nella configurazione: allegare il file a una segnalazione permette di capire cosa riporta
+l'unità senza dover eseguire script.
+
+## Test
+
+```
+pip install -r requirements_test.txt
+pytest
+```
 
 ## Crediti
 

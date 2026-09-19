@@ -1,11 +1,13 @@
 """Shared base entity for Pure VMC."""
 from __future__ import annotations
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import PureCoordinator
+from .modbus import PureModbusError
 
 
 class PureEntity(CoordinatorEntity[PureCoordinator]):
@@ -24,4 +26,17 @@ class PureEntity(CoordinatorEntity[PureCoordinator]):
             name="Pure VMC",
             manufacturer="Pure",
             model="Pure VMC",
+            # Only known when the unit is read over Modbus
+            sw_version=self.coordinator.data.get("sw_version"),
         )
+
+    async def _async_write_register(
+        self, register: int, value: int, mask: int = 0xFFFF, store: bool = True
+    ) -> None:
+        """Write over Modbus, surfacing a refusal as an error the user can read."""
+        try:
+            await self.coordinator.async_write_register(
+                register, value, mask, store=store
+            )
+        except PureModbusError as err:
+            raise HomeAssistantError(str(err)) from err
