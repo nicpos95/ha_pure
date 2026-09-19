@@ -56,6 +56,9 @@ Inserisci l'indirizzo IP dell'unità (es. `192.168.1.243`). L'integrazione teste
 
 ## Entity
 
+La descrizione completa di ogni entità — sorgente, significato, valori, cosa succede scrivendola — è in
+**[docs/entita.md](docs/entita.md)**.
+
 | Platform | Nome | Descrizione |
 |----------|------|-------------|
 | `fan` | Pure Ventilation | Controllo ventola (velocità, preset) |
