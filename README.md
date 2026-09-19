@@ -59,6 +59,13 @@ Inserisci l'indirizzo IP dell'unità (es. `192.168.1.243`). L'integrazione teste
 | `sensor` | Inlet Temperature | Temperatura aria immessa (Ti) |
 | `sensor` | Ventilation Speed | Velocità corrente % |
 | `sensor` | Heat Recovery Efficiency | Efficienza recupero calore % |
+| `sensor` | Temperature Setpoint | Temperatura impostata (logica bypass) |
+| `binary_sensor` | Filter | Allarme filtri sporchi (`DirtyFilters`) — `problem` |
+| `binary_sensor` | Alarm | Un qualsiasi allarme attivo — `problem` |
+| `binary_sensor` | Bypass | Bypass free-cooling aperto |
+
+Tutte le entità sono in sola lettura e vengono lette dalle pagine della schermata
+principale, senza navigare i menu dell'unità (quindi il pannello a muro non viene disturbato).
 
 ## Crediti
 

@@ -9,22 +9,31 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    ALARM_FILTER_MARKER,
+    ENDPOINT_ALARM_BANNER,
+    ENDPOINT_ALARM_ICON,
     ENDPOINT_BOOST,
+    ENDPOINT_BYPASS,
     ENDPOINT_SPEED,
     ENDPOINT_TEMP_EXHAUST,
     ENDPOINT_TEMP_EXTERNAL,
     ENDPOINT_TEMP_INLET,
     ENDPOINT_TEMP_RETURN,
+    ENDPOINT_TEMP_SETPOINT,
     PAYLOAD_BOOST,
     PAYLOAD_ON_OFF,
     PAYLOAD_SPEED_DOWN_ONE,
     PAYLOAD_SPEED_DOWN_TEN,
     PAYLOAD_SPEED_UP_ONE,
     PAYLOAD_SPEED_UP_TEN,
+    REGEX_ALARM_BANNER,
+    REGEX_ALARM_ICON,
+    REGEX_BYPASS,
     REGEX_TEMP_EXHAUST,
     REGEX_TEMP_EXTERNAL,
     REGEX_TEMP_INLET,
     REGEX_TEMP_RETURN,
+    REGEX_TEMP_SETPOINT,
     REGEX_SPEED,
     SPEED_OFF,
     SPEED_TIMER_MODE,
@@ -35,6 +44,11 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 10  # seconds
+
+# The unit runs a tiny single-threaded web server; cap in-flight requests so a
+# poll cannot overwhelm it. Beyond a handful of parallel connections it starts
+# dropping them, which would surface as transient "unknown" states.
+MAX_CONCURRENT_REQUESTS = 3
 
 
 class PureApiError(Exception):
@@ -51,6 +65,7 @@ class PureApi:
             host = f"http://{host}"
         self._base = host
         self._session = session
+        self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
     # ------------------------------------------------------------------
     # Low-level helpers
@@ -59,7 +74,9 @@ class PureApi:
     async def _get(self, endpoint: str) -> str:
         url = f"{self._base}{endpoint}"
         try:
-            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)) as resp:
+            async with self._semaphore, self._session.get(
+                url, timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            ) as resp:
                 resp.raise_for_status()
                 return await resp.text()
         except asyncio.TimeoutError as err:
@@ -71,7 +88,7 @@ class PureApi:
         url = f"{self._base}{endpoint}"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         try:
-            async with self._session.post(
+            async with self._semaphore, self._session.post(
                 url,
                 data=payload,
                 headers=headers,
@@ -144,6 +161,29 @@ class PureApi:
         html = await self._get(ENDPOINT_TEMP_INLET)
         return self._parse_float(html, REGEX_TEMP_INLET)
 
+    async def get_temp_setpoint(self) -> float | None:
+        """Target temperature that drives the bypass (free-cooling) logic."""
+        html = await self._get(ENDPOINT_TEMP_SETPOINT)
+        return self._parse_float(html, REGEX_TEMP_SETPOINT)
+
+    async def get_alarm_banner(self) -> str:
+        """The currently displayed alarm text (empty string when no alarm)."""
+        html = await self._get(ENDPOINT_ALARM_BANNER)
+        match = re.search(REGEX_ALARM_BANNER, html, re.DOTALL)
+        return match.group(1).strip() if match else ""
+
+    async def get_alarm_active(self) -> bool | None:
+        """True when the unit is raising any alarm (home-screen alarm icon)."""
+        html = await self._get(ENDPOINT_ALARM_ICON)
+        match = re.search(REGEX_ALARM_ICON, html)
+        return match.group(1) == "on" if match else None
+
+    async def get_bypass(self) -> bool | None:
+        """True when the bypass (free-cooling) damper is open."""
+        html = await self._get(ENDPOINT_BYPASS)
+        match = re.search(REGEX_BYPASS, html)
+        return match.group(1) == "on" if match else None
+
     async def get_all(self) -> dict[str, Any]:
         """Fetch all values concurrently. Used by the coordinator."""
         results = await asyncio.gather(
@@ -152,22 +192,41 @@ class PureApi:
             self.get_temp_return(),
             self.get_temp_exhaust(),
             self.get_temp_inlet(),
+            self.get_temp_setpoint(),
+            self.get_alarm_banner(),
+            self.get_alarm_active(),
+            self.get_bypass(),
             return_exceptions=True,
         )
 
-        speed_data, t_ext, t_ret, t_exh, t_in = results
+        speed_data, t_ext, t_ret, t_exh, t_in, t_sp, banner, alarm, bypass = results
 
         # If the speed call itself failed, propagate — it's the most critical value
         if isinstance(speed_data, Exception):
             raise PureApiError("Failed to fetch speed") from speed_data
 
+        def ok(value: Any) -> Any:
+            return None if isinstance(value, Exception) else value
+
+        banner_text = ok(banner)
+        # The banner is a reliable source only when it was actually read; when the
+        # fetch failed we report ``None`` (unknown) rather than a false "clean".
+        filter_dirty: bool | None = (
+            None if banner_text is None else ALARM_FILTER_MARKER in banner_text.lower()
+        )
+
         return {
             "speed": speed_data["speed"],
             "timer_mode": speed_data["timer_mode"],
-            "temp_external": t_ext if not isinstance(t_ext, Exception) else None,
-            "temp_return": t_ret if not isinstance(t_ret, Exception) else None,
-            "temp_exhaust": t_exh if not isinstance(t_exh, Exception) else None,
-            "temp_inlet": t_in if not isinstance(t_in, Exception) else None,
+            "temp_external": ok(t_ext),
+            "temp_return": ok(t_ret),
+            "temp_exhaust": ok(t_exh),
+            "temp_inlet": ok(t_in),
+            "temp_setpoint": ok(t_sp),
+            "alarm_banner": banner_text,
+            "alarm_active": ok(alarm),
+            "bypass": ok(bypass),
+            "filter_dirty": filter_dirty,
         }
 
     # ------------------------------------------------------------------
