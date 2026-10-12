@@ -69,6 +69,8 @@ async def test_setup_over_modbus(
         == "rpm"
     )
     assert hass.states.get("sensor.pure_vmc_filter_alarm_threshold").state == "2000"
+    # This panel does not publish its Factory configuration, so none is shown
+    assert hass.states.get("sensor.pure_vmc_heater_type") is None
     assert hass.states.get("binary_sensor.pure_vmc_anti_frost").state == "off"
     assert hass.states.get("binary_sensor.pure_vmc_fan_fault").state == "off"
 

@@ -82,6 +82,66 @@
           "off": "Closed",
           "on": "Open"
         }
+      },
+      "heater_type": {
+        "name": "Heater Type",
+        "state": {
+          "none": "None",
+          "electric": "Electric",
+          "electric_two_stage": "Electric, two stages",
+          "water": "Water coil",
+          "electric_modulating": "Electric, modulating",
+          "water_modulating": "Water coil, modulating"
+        }
+      },
+      "regulation_probe": {
+        "name": "Regulation Probe",
+        "state": {
+          "none": "None",
+          "air_quality": "Air quality (CO2/VOC)",
+          "humidity": "Humidity",
+          "external_signal": "External 0-10 V signal"
+        }
+      },
+      "filter_alarm_type": {
+        "name": "Filter Alarm Type",
+        "state": {
+          "none": "None",
+          "pressure_switch": "Pressure switches",
+          "hours": "Run hours"
+        }
+      },
+      "fan_alarm_type": {
+        "name": "Fan Alarm Type",
+        "state": {
+          "none": "None",
+          "pressure_switch": "Pressure switches",
+          "tacho": "Tacho signal"
+        }
+      },
+      "bypass_type": {
+        "name": "Bypass Type",
+        "state": {
+          "none": "None",
+          "season": "Seasonal",
+          "universal": "Universal"
+        }
+      },
+      "anti_frost_type": {
+        "name": "Anti-Frost Type",
+        "state": {
+          "none": "None",
+          "fan_speed": "Fan speed",
+          "heater": "Heater"
+        }
+      },
+      "board_model": {
+        "name": "Controller Boards",
+        "state": {
+          "x540_u0_u2": "X540 U0-U2",
+          "x540_u3_u4": "X540 U3-U4",
+          "x540_u3_u4_x531": "X540 U3-U4 + X531"
+        }
       }
     },
     "binary_sensor": {

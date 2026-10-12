@@ -165,3 +165,13 @@ async def test_unreachable_unit_is_reported(
             hass, "select", "select_option", entity_id="select.pure_vmc_season", option="winter"
         )
     await panel.start()  # so the fixture can stop it again
+
+
+async def test_factory_configuration_sensors(
+    hass: HomeAssistant, panel: FakePanel, entry: MockConfigEntry
+) -> None:
+    # The fixture's panel publishes register 7 (tacho fans, universal bypass)
+    assert hass.states.get("sensor.pure_vmc_fan_alarm_type").state == "tacho"
+    assert hass.states.get("sensor.pure_vmc_bypass_type").state == "universal"
+    assert hass.states.get("sensor.pure_vmc_heater_type").state == "none"
+    assert hass.states.get("sensor.pure_vmc_controller_boards").state == "x540_u0_u2"

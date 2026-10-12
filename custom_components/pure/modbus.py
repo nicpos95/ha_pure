@@ -30,7 +30,7 @@ WRITE_SETTLE_TIME = 0.4  # seconds
 
 # (first register, count) — contiguous blocks that cover everything we decode.
 READ_BLOCKS: tuple[tuple[int, int], ...] = (
-    (1, 27),   # software version, configuration flags, season/bypass, filter hours
+    (1, 27),   # software version, configuration, installer parameters, season/bypass, filter hours
     (51, 4),   # speed set-point, temperature set-point, boost timer
     (81, 19),  # unit 1: temperatures, status flags, fan speeds, alarms, run-hours
 )
@@ -39,6 +39,7 @@ REG_SW_VERSION_YEAR_MONTH = 3
 REG_SW_VERSION_DAY_PATCH = 4
 REG_REMOTE_CONTROL = 5
 REG_CONFIG_FLAGS_1 = 7
+REG_CONFIG_FLAGS_2 = 8
 REG_PARAMETER_FLAGS = 20
 REG_FILTER_MAX_HOURS = 24
 REG_SPEED_SETPOINT = 51
@@ -89,6 +90,31 @@ FANS_FAIL_TACH = 2
 # CONFIG_FLAGS_1 (register 7): bits 10-11 == 2 means a "universal" bypass, the
 # only kind whose mode (auto/off/on) can be chosen; otherwise the unit ignores it
 BYPASS_UNIVERSAL_ON_OFF = 2
+
+# Factory configuration, CONFIG_FLAGS_1 (register 7): (name, first bit, bit count,
+# {raw value: state}). Read-only over Modbus, set in the panel's Factory menu.
+FACTORY_CONFIG_1: tuple[tuple[str, int, int, dict[int, str]], ...] = (
+    (
+        "heater_type",
+        0,
+        3,
+        {
+            0: "none",
+            1: "electric",
+            2: "electric_two_stage",
+            3: "water",
+            4: "electric_modulating",
+            5: "water_modulating",
+        },
+    ),
+    ("regulation_probe", 4, 2, {0: "none", 1: "air_quality", 2: "humidity", 3: "external_signal"}),
+    ("filter_alarm_type", 6, 2, {0: "none", 1: "pressure_switch", 2: "hours"}),
+    ("fan_alarm_type", 8, 2, {0: "none", 1: "pressure_switch", 2: "tacho"}),
+    ("bypass_type", 10, 2, {0: "none", 1: "season", 2: "universal"}),
+    ("anti_frost_type", 12, 2, {0: "none", 1: "fan_speed", 2: "heater"}),
+)
+# CONFIG_FLAGS_2 (register 8) bits 0-1: the controller boards fitted
+BOARD_MODELS = {0: "x540_u0_u2", 1: "x540_u3_u4", 2: "x540_u3_u4_x531"}
 
 # PARAMETER_FLAGS (register 20): season in bits 0-1, bypass mode in bits 2-3
 SEASON_MASK = 0b0011
@@ -330,6 +356,23 @@ def _fan_speed_is_rpm(config_flags: int) -> bool:
     return (config_flags >> 8 & 0b11) == FANS_FAIL_TACH
 
 
+def _factory_configuration(registers: dict[int, int]) -> dict[str, Any]:
+    """The Factory-menu configuration, when the panel publishes it.
+
+    Some panels leave registers 7 and 8 at 0 whatever the unit's real build
+    (a Pure 250 does, although it has tacho fans and a bypass), so an all-zero
+    register 7 reads as "not reported" rather than as a unit with nothing fitted.
+    """
+    flags_1 = registers[REG_CONFIG_FLAGS_1]
+    if flags_1 == 0:
+        return {"configuration_reported": False}
+    config: dict[str, Any] = {"configuration_reported": True}
+    for name, first_bit, bit_count, states in FACTORY_CONFIG_1:
+        config[name] = states.get(flags_1 >> first_bit & (1 << bit_count) - 1)
+    config["board_model"] = BOARD_MODELS.get(registers[REG_CONFIG_FLAGS_2] & 0b11)
+    return config
+
+
 def decode_registers(registers: dict[int, int]) -> dict[str, Any]:
     """Translate raw registers into the coordinator's data dictionary."""
     alarms1 = registers[REG_ALARMS_1]
@@ -399,6 +442,7 @@ def decode_registers(registers: dict[int, int]) -> dict[str, Any]:
         "fan_hours": registers[REG_FAN_HOURS_HIGH] * 65536
         + registers[REG_FAN_HOURS_LOW],
         "filter_max_hours": registers[REG_FILTER_MAX_HOURS] * FILTER_HOURS_STEP,
+        **_factory_configuration(registers),
         "season": SEASONS.get(parameters & 0b11),
         "bypass_mode": BYPASS_MODES.get(parameters >> 2 & 0b11),
         "bypass_mode_selectable": (registers[REG_CONFIG_FLAGS_1] >> 10 & 0b11)
