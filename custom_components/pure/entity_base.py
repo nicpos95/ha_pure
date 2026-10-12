@@ -7,6 +7,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import PureCoordinator
+from .menu import PureMenuError
 from .modbus import PureModbusError
 
 
@@ -39,4 +40,11 @@ class PureEntity(CoordinatorEntity[PureCoordinator]):
                 register, value, mask, store=store
             )
         except PureModbusError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    async def _async_set_filter_hours(self, hours: int) -> None:
+        """Through the web Installer menu, surfacing a failure the user can read."""
+        try:
+            await self.coordinator.async_set_filter_hours(hours)
+        except (PureMenuError, ValueError) as err:
             raise HomeAssistantError(str(err)) from err

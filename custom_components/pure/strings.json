@@ -22,9 +22,18 @@
         "title": "Pure VMC",
         "description": "Modbus TCP returns more data than the web pages (fan speeds, run hours, individual alarms) with a single short request. It is used only when the unit answers on port 502.",
         "data": {
-          "modbus": "Read the unit over Modbus TCP"
+          "modbus": "Read the unit over Modbus TCP",
+          "installer_code": "Installer code",
+          "filter_interval": "Run hours between filter changes"
+        },
+        "data_description": {
+          "installer_code": "Four digits, the code of the panel's Installer menu. With it the filter-alarm threshold can be changed from Home Assistant (through the web Installer menu: about 20 s, and the unit refuses Modbus commands for a minute afterwards). Leave empty to keep it read-only.",
+          "filter_interval": "Used by the \"Filters Replaced\" button: the next filter alarm comes after this many run hours."
         }
       }
+    },
+    "error": {
+      "invalid_installer_code": "The installer code is four digits."
     }
   },
   "entity": {
@@ -205,6 +214,9 @@
       },
       "boost_timer": {
         "name": "Boost Timer"
+      },
+      "filter_max_hours": {
+        "name": "Filter Alarm Threshold"
       }
     },
     "select": {
@@ -223,6 +235,11 @@
           "off": "Closed",
           "on": "Open"
         }
+      }
+    },
+    "button": {
+      "filters_replaced": {
+        "name": "Filters Replaced"
       }
     }
   }

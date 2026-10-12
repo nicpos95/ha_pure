@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import aiohttp
@@ -14,9 +15,26 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .api import PureApi
-from .const import CONF_HOST, CONF_MODBUS, DEFAULT_MODBUS, DOMAIN
+from .const import (
+    CONF_FILTER_INTERVAL,
+    CONF_HOST,
+    CONF_INSTALLER_CODE,
+    CONF_MODBUS,
+    DEFAULT_FILTER_INTERVAL,
+    DEFAULT_MODBUS,
+    DOMAIN,
+)
+from .menu import FILTER_HOURS_STEP
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,13 +85,24 @@ class PureConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class PureOptionsFlow(OptionsFlow):
-    """Lets the user turn the Modbus TCP data source off."""
+    """Modbus on/off, and the installer code for the filter-alarm threshold."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        options = self.config_entry.options
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            code = (user_input.get(CONF_INSTALLER_CODE) or "").strip()
+            if code and not re.fullmatch(r"\d{4}", code):
+                errors[CONF_INSTALLER_CODE] = "invalid_installer_code"
+            else:
+                data = {**user_input}
+                data.pop(CONF_INSTALLER_CODE, None)
+                if code:
+                    data[CONF_INSTALLER_CODE] = code
+                data[CONF_FILTER_INTERVAL] = int(user_input[CONF_FILTER_INTERVAL])
+                return self.async_create_entry(data=data)
 
         return self.async_show_form(
             step_id="init",
@@ -81,10 +110,27 @@ class PureOptionsFlow(OptionsFlow):
                 {
                     vol.Required(
                         CONF_MODBUS,
-                        default=self.config_entry.options.get(
-                            CONF_MODBUS, DEFAULT_MODBUS
-                        ),
+                        default=options.get(CONF_MODBUS, DEFAULT_MODBUS),
                     ): bool,
+                    vol.Optional(
+                        CONF_INSTALLER_CODE,
+                        description={
+                            "suggested_value": options.get(CONF_INSTALLER_CODE, "")
+                        },
+                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                    vol.Required(
+                        CONF_FILTER_INTERVAL,
+                        default=options.get(CONF_FILTER_INTERVAL, DEFAULT_FILTER_INTERVAL),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=FILTER_HOURS_STEP,
+                            max=20000,
+                            step=FILTER_HOURS_STEP,
+                            unit_of_measurement="h",
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    ),
                 }
             ),
+            errors=errors,
         )

@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import aiohttp
@@ -69,6 +71,32 @@ class PureApi:
         self.hostname = URL(host).host or host
         self._session = session
         self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+
+    @property
+    def base_url(self) -> str:
+        return self._base
+
+    @property
+    def session(self) -> aiohttp.ClientSession:
+        return self._session
+
+    @asynccontextmanager
+    async def exclusive(self) -> AsyncIterator[None]:
+        """Hold the web interface alone, e.g. while walking through its menus.
+
+        The menus are a state machine on the unit's side, so a request made in
+        between (a fallback poll, a fan command) would land on the wrong screen.
+        Taking every slot waits for requests in flight and holds back new ones.
+        """
+        taken = 0
+        try:
+            for _ in range(MAX_CONCURRENT_REQUESTS):
+                await self._semaphore.acquire()
+                taken += 1
+            yield
+        finally:
+            for _ in range(taken):
+                self._semaphore.release()
 
     # ------------------------------------------------------------------
     # Low-level helpers

@@ -10,8 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import PureApi
-from .const import CONF_HOST, CONF_MODBUS, DEFAULT_MODBUS, DOMAIN
+from .const import CONF_HOST, CONF_INSTALLER_CODE, CONF_MODBUS, DEFAULT_MODBUS, DOMAIN
 from .coordinator import PureCoordinator
+from .menu import PureMenu
 from .modbus import PureModbus
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.FAN,
     Platform.NUMBER,
     Platform.SELECT,
@@ -44,7 +46,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 api.hostname,
             )
 
-    coordinator = PureCoordinator(hass, entry, api, modbus)
+    # The web Installer menu changes the filter-alarm threshold; Modbus checks the result
+    menu: PureMenu | None = None
+    if modbus is not None and entry.options.get(CONF_INSTALLER_CODE):
+        menu = PureMenu(api.base_url, api.session, entry.options[CONF_INSTALLER_CODE])
+
+    coordinator = PureCoordinator(hass, entry, api, modbus, menu)
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

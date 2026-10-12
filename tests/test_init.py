@@ -9,7 +9,13 @@ from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.pure.const import CONF_HOST, CONF_MODBUS, DOMAIN
+from custom_components.pure.const import (
+    CONF_FILTER_INTERVAL,
+    CONF_HOST,
+    CONF_INSTALLER_CODE,
+    CONF_MODBUS,
+    DOMAIN,
+)
 from custom_components.pure.modbus import PureModbus
 
 from .conftest import WEB_PAGES, FakePanel
@@ -152,4 +158,35 @@ async def test_options_flow(
         result["flow_id"], {CONF_MODBUS: False}
     )
     assert result["type"] == "create_entry"
-    assert entry.options == {CONF_MODBUS: False}
+    assert entry.options == {CONF_MODBUS: False, CONF_FILTER_INTERVAL: 2000}
+
+
+async def test_options_installer_code(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    _mock_web_pages(aioclient_mock)
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: HOST}, options={CONF_MODBUS: False}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    async def configure(**data):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        return await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_MODBUS: False, CONF_FILTER_INTERVAL: 4000, **data}
+        )
+
+    result = await configure(**{CONF_INSTALLER_CODE: "12a4"})
+    assert result["errors"] == {CONF_INSTALLER_CODE: "invalid_installer_code"}
+
+    result = await configure(**{CONF_INSTALLER_CODE: " 1234 "})
+    assert result["type"] == "create_entry"
+    assert entry.options[CONF_INSTALLER_CODE] == "1234"
+    assert entry.options[CONF_FILTER_INTERVAL] == 4000
+
+    # Clearing the field removes the code
+    await hass.async_block_till_done()
+    result = await configure(**{CONF_INSTALLER_CODE: ""})
+    assert CONF_INSTALLER_CODE not in entry.options

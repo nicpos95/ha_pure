@@ -14,7 +14,12 @@ from pytest_homeassistant_custom_component.common import (
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.pure.const import CONF_HOST, DOMAIN
+from custom_components.pure.const import (
+    CONF_FILTER_INTERVAL,
+    CONF_HOST,
+    CONF_INSTALLER_CODE,
+    DOMAIN,
+)
 
 from .conftest import FakePanel
 from .test_init import HOST, _modbus_on
@@ -175,3 +180,88 @@ async def test_factory_configuration_sensors(
     assert hass.states.get("sensor.pure_vmc_bypass_type").state == "universal"
     assert hass.states.get("sensor.pure_vmc_heater_type").state == "none"
     assert hass.states.get("sensor.pure_vmc_controller_boards").state == "x540_u0_u2"
+
+
+# --- Filter-alarm threshold through the web Installer menu ----------------------
+
+@pytest.fixture
+async def entry_with_code(
+    hass: HomeAssistant, panel: FakePanel, aioclient_mock: AiohttpClientMocker, socket_enabled
+):
+    import re
+
+    from .fake_menu import FakeMenu
+
+    panel.registers[24] = 8  # 4000 h
+    fake = FakeMenu(code="1234", filter_hours=4000, panel=panel)
+    aioclient_mock.get(re.compile(r"http://127\.0\.0\.1/(index\.html|cmd_sel)"), side_effect=fake.handle)
+    aioclient_mock.post("http://127.0.0.1/menu.html", side_effect=fake.handle)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: HOST},
+        options={CONF_INSTALLER_CODE: "1234", CONF_FILTER_INTERVAL: 4000},
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.pure.menu.REQUEST_INTERVAL", 0),
+        patch("custom_components.pure.coordinator.MENU_SETTLE_TIME", 0),
+        _modbus_on(panel),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        yield entry, fake
+
+
+THRESHOLD = "number.pure_vmc_filter_alarm_threshold"
+
+
+async def test_filter_threshold_through_installer_menu(
+    hass: HomeAssistant, panel: FakePanel, entry_with_code
+) -> None:
+    _entry, fake = entry_with_code
+    assert hass.states.get(THRESHOLD).state == "4000"
+
+    await _call(hass, "number", "set_value", entity_id=THRESHOLD, value=5500)
+    assert fake.filter_hours == 5500
+    # Read back over Modbus, by the number and by the read-only sensor alike
+    assert panel.registers[24] == 11
+    assert hass.states.get(THRESHOLD).state == "5500"
+    assert hass.states.get("sensor.pure_vmc_filter_alarm_threshold").state == "5500"
+    assert fake.screen == "00"  # the web interface is back on its home screen
+
+
+async def test_filters_replaced_button(
+    hass: HomeAssistant, panel: FakePanel, entry_with_code
+) -> None:
+    _entry, fake = entry_with_code
+    panel.registers[96] = 1234  # run hours
+    await _call(hass, "button", "press", entity_id="button.pure_vmc_filters_replaced")
+    # 1234 h now + the 4000 h interval, rounded up to the unit's 500 h steps
+    assert fake.filter_hours == 5500
+    assert hass.states.get(THRESHOLD).state == "5500"
+
+
+async def test_filter_threshold_wrong_code(
+    hass: HomeAssistant, panel: FakePanel, entry_with_code
+) -> None:
+    _entry, fake = entry_with_code
+    fake.code = "4321"  # the panel's code is not the one configured
+    with pytest.raises(HomeAssistantError, match="installer code"):
+        await _call(hass, "number", "set_value", entity_id=THRESHOLD, value=5500)
+    assert panel.registers[24] == 8
+
+
+async def test_no_installer_code_no_menu_entities(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    assert hass.states.get(THRESHOLD) is None
+    assert hass.states.get("button.pure_vmc_filters_replaced") is None
+
+
+def test_next_filter_threshold() -> None:
+    from custom_components.pure.button import next_filter_threshold
+
+    assert next_filter_threshold(0, 4000) == 4000
+    assert next_filter_threshold(1234, 4000) == 5500  # rounded up to the 500 h steps
+    assert next_filter_threshold(98000, 4000) == 99500  # the register's ceiling
+

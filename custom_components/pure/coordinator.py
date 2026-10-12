@@ -1,6 +1,7 @@
 """DataUpdateCoordinator for the Pure VMC VMC integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from time import monotonic
@@ -13,6 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import PureApi, PureApiError
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .menu import PureMenu, PureMenuError
 from .modbus import (
     PureModbus,
     PureModbusError,
@@ -26,6 +28,9 @@ _LOGGER = logging.getLogger(__name__)
 # or touch panel. A dropped write is kept and tried again until it goes through.
 WRITE_RETRY_INTERVAL = 15  # seconds
 WRITE_RETRY_WINDOW = 180  # seconds before a write that keeps being dropped is given up
+
+# After a change in the web menu, before Modbus is read to check it
+MENU_SETTLE_TIME = 2  # seconds
 
 
 class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -42,9 +47,11 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry: ConfigEntry,
         api: PureApi,
         modbus: PureModbus | None = None,
+        menu: PureMenu | None = None,
     ) -> None:
         self.api = api
         self.modbus = modbus
+        self.menu = menu
         self._modbus_failing = False
         # Dropped writes waiting for the unit: (register, mask) -> (value, deadline, store)
         self._pending_writes: dict[tuple[int, int], tuple[int, float, bool]] = {}
@@ -94,6 +101,25 @@ class PureCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Not async_request_refresh(): its debouncer would leave the entities
         # showing the old state for up to 10 s when commands follow each other.
         await self.async_refresh()
+
+    async def async_set_filter_hours(self, hours: int) -> None:
+        """Set the filter-alarm threshold through the web Installer menu.
+
+        The unit ignores Modbus writes to it, so the menu is walked like an
+        installer would; Modbus then confirms the value the unit really took.
+        Afterwards the unit refuses Modbus writes for about a minute, which the
+        retry queue above absorbs.
+        """
+        assert self.menu is not None
+        async with self.api.exclusive():
+            await self.menu.set_filter_hours(hours)
+        await asyncio.sleep(MENU_SETTLE_TIME)
+        await self.async_refresh()
+        if self.data.get("filter_max_hours") != hours:
+            raise PureMenuError(
+                f"The Installer menu showed {hours} h but the unit reports "
+                f"{self.data.get('filter_max_hours')} h"
+            )
 
     def _schedule_retry(self) -> None:
         if self._cancel_retry is None:

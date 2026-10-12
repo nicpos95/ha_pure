@@ -3,13 +3,14 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import PureCoordinator
 from .entity_base import PureEntity
+from .menu import FILTER_HOURS_MAX, FILTER_HOURS_STEP
 from .modbus import REG_BOOST_TIMER, REG_TEMP_SETPOINT
 
 
@@ -21,12 +22,14 @@ async def async_setup_entry(
     coordinator: PureCoordinator = hass.data[DOMAIN][entry.entry_id]
     if coordinator.modbus is None:
         return
-    async_add_entities(
-        [
-            PureSetpointNumber(coordinator, entry.entry_id),
-            PureBoostNumber(coordinator, entry.entry_id),
-        ]
-    )
+    entities: list[NumberEntity] = [
+        PureSetpointNumber(coordinator, entry.entry_id),
+        PureBoostNumber(coordinator, entry.entry_id),
+    ]
+    # Settable only through the web Installer menu, so only with the installer code
+    if coordinator.menu is not None:
+        entities.append(PureFilterHoursNumber(coordinator, entry.entry_id))
+    async_add_entities(entities)
 
 
 class PureSetpointNumber(PureEntity, NumberEntity):
@@ -77,3 +80,35 @@ class PureBoostNumber(PureEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         await self._async_write_register(REG_BOOST_TIMER, int(value) * 60, store=False)
+
+
+class PureFilterHoursNumber(PureEntity, NumberEntity):
+    """Run hours at which the filter alarm goes off (Installer menu, "Ore Filtri").
+
+    The unit ignores Modbus writes to it, so it is set through the web Installer
+    menu (about 20 s, and Modbus writes are refused for a minute afterwards); the
+    value shown is read back over Modbus. It only matters when the filter alarm
+    counts run hours (Factory menu).
+    """
+
+    _attr_translation_key = "filter_max_hours"
+    _attr_device_class = NumberDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.HOURS
+    _attr_native_min_value = FILTER_HOURS_STEP
+    _attr_native_max_value = FILTER_HOURS_MAX
+    _attr_native_step = FILTER_HOURS_STEP
+    _attr_mode = NumberMode.BOX
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:air-filter"
+
+    def __init__(self, coordinator: PureCoordinator, entry_id: str) -> None:
+        super().__init__(coordinator, entry_id)
+        self._attr_unique_id = f"{entry_id}_filter_max_hours_number"
+
+    @property
+    def native_value(self) -> int | None:
+        return self.coordinator.data.get("filter_max_hours")
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self._async_set_filter_hours(round(value / FILTER_HOURS_STEP) * FILTER_HOURS_STEP)
+
