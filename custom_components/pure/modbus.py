@@ -40,6 +40,7 @@ REG_SW_VERSION_DAY_PATCH = 4
 REG_REMOTE_CONTROL = 5
 REG_CONFIG_FLAGS_1 = 7
 REG_CONFIG_FLAGS_2 = 8
+REG_SPEED_BALANCE = 14
 REG_PARAMETER_FLAGS = 20
 REG_FILTER_MAX_HOURS = 24
 REG_SPEED_SETPOINT = 51
@@ -115,6 +116,12 @@ FACTORY_CONFIG_1: tuple[tuple[str, int, int, dict[int, str]], ...] = (
 )
 # CONFIG_FLAGS_2 (register 8) bits 0-1: the controller boards fitted
 BOARD_MODELS = {0: "x540_u0_u2", 1: "x540_u3_u4", 2: "x540_u3_u4_x531"}
+
+# SPEED_BALANCE (register 14, installer menu): extract fan speed as a percentage
+# of the supply fan's. Read-only here: a Pure 250 ignores Modbus writes to it (and
+# to the filter-hours threshold) while accepting the season, set-points and speed.
+SPEED_BALANCE_MIN = 74
+SPEED_BALANCE_MAX = 135
 
 # PARAMETER_FLAGS (register 20): season in bits 0-1, bypass mode in bits 2-3
 SEASON_MASK = 0b0011
@@ -381,6 +388,7 @@ def decode_registers(registers: dict[int, int]) -> dict[str, Any]:
     parameters = registers[REG_PARAMETER_FLAGS]
     speed_setpoint = registers[REG_SPEED_SETPOINT]
     temp_setpoint = registers[REG_TEMP_SETPOINT]
+    balance = registers[REG_SPEED_BALANCE]
 
     faults = {
         "fault_communication": _bit(alarms1, ALARM1_COMM_X540)
@@ -442,6 +450,10 @@ def decode_registers(registers: dict[int, int]) -> dict[str, Any]:
         "fan_hours": registers[REG_FAN_HOURS_HIGH] * 65536
         + registers[REG_FAN_HOURS_LOW],
         "filter_max_hours": registers[REG_FILTER_MAX_HOURS] * FILTER_HOURS_STEP,
+        # Outside its range the panel does not use the parameter (it reads 0)
+        "speed_balance": (
+            balance if SPEED_BALANCE_MIN <= balance <= SPEED_BALANCE_MAX else None
+        ),
         **_factory_configuration(registers),
         "season": SEASONS.get(parameters & 0b11),
         "bypass_mode": BYPASS_MODES.get(parameters >> 2 & 0b11),

@@ -156,3 +156,9 @@ def test_decode_factory_configuration() -> None:
     }
     # A value the manual does not list reads as unknown
     assert decode_registers(_registers(r7=7))["heater_type"] is None
+
+
+def test_decode_speed_balance() -> None:
+    assert decode_registers(_registers())["speed_balance"] == 100
+    # Outside its range it is a parameter the unit does not use
+    assert decode_registers(_registers(r14=0))["speed_balance"] is None

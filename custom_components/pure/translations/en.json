@@ -142,6 +142,9 @@
           "x540_u3_u4": "X540 U3-U4",
           "x540_u3_u4_x531": "X540 U3-U4 + X531"
         }
+      },
+      "speed_balance": {
+        "name": "Fan Balance"
       }
     },
     "binary_sensor": {

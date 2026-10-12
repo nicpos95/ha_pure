@@ -130,6 +130,17 @@ MODBUS_SENSORS: tuple[PureSensorDescription, ...] = (
 )
 
 
+# Installer parameter, only on units that use it (others leave the register at 0)
+SPEED_BALANCE_SENSOR = PureSensorDescription(
+    key="speed_balance",
+    data_key="speed_balance",
+    translation_key="speed_balance",
+    native_unit_of_measurement=PERCENTAGE,
+    entity_category=EntityCategory.DIAGNOSTIC,
+    icon="mdi:scale-balance",
+)
+
+
 # The Factory-menu configuration: read-only, and only on panels that publish it
 CONFIGURATION_ICONS = {
     "heater_type": "mdi:radiator",
@@ -214,6 +225,10 @@ async def async_setup_entry(
         if not coordinator.data.get("bypass_mode_selectable"):
             entities.append(
                 PureValueSensor(coordinator, entry.entry_id, BYPASS_MODE_SENSOR)
+            )
+        if coordinator.data.get("speed_balance") is not None:
+            entities.append(
+                PureValueSensor(coordinator, entry.entry_id, SPEED_BALANCE_SENSOR)
             )
         if coordinator.data.get("configuration_reported"):
             for desc in CONFIGURATION_SENSORS:
