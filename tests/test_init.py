@@ -72,8 +72,9 @@ async def test_setup_over_modbus(
     assert hass.states.get("binary_sensor.pure_vmc_anti_frost").state == "off"
     assert hass.states.get("binary_sensor.pure_vmc_fan_fault").state == "off"
 
-    device = dr.async_get(hass).async_get_device({(DOMAIN, entry.entry_id)})
-    assert device is not None and device.sw_version == "25.01.09.00"
+    # Not async_get_device(): Home Assistant 2026.10 deprecates it
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert [device.sw_version for device in devices] == ["25.01.09.00"]
 
     assert await hass.config_entries.async_unload(entry.entry_id)
 
