@@ -90,6 +90,8 @@ Create solo se l'unità risponde su Modbus TCP (porta 502).
 | `number` | Temperature Setpoint | Set-point temperatura, passi di 0,2 °C — **modificabile** |
 | `number` | Boost Timer | Minuti di booster: impostarlo avvia il booster, 0 lo annulla |
 | `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
+| `number` | Filter Alarm Threshold | Soglia ore dell'allarme filtri, **modificabile** dal menù Installatore web — solo con il codice installatore nelle opzioni (vedi sotto) |
+| `button` | Filters Replaced | Da premere dopo il cambio filtri: soglia = ore di funzionamento + intervallo — solo con il codice installatore |
 | `sensor` | Fan Balance | Velocità del ventilatore di ripresa in % di quello di immissione (parametro del menù Installatore) — diagnostica, solo se l'unità lo usa |
 | `sensor` | Heater Type, Regulation Probe, Filter Alarm Type, Fan Alarm Type, Bypass Type, Anti-Frost Type, Controller Boards | Configurazione del menù Fabbrica (registri 7 e 8): post-riscaldamento, sonda di regolazione, tipo di allarme filtri e ventilatori, tipo di bypass, antigelo, schede installate — diagnostica, **solo sui pannelli che la pubblicano** (una Pure 250 lascia questi registri a 0, e allora non vengono creati) |
 | `binary_sensor` | Anti-Frost | Antigelo scambiatore attivo |
@@ -124,8 +126,9 @@ Due particolarità del pannello, verificate su una Pure 250:
   l'unità lo accetta — nel frattempo l'entità mostra ancora il valore reale.
 - **I parametri del menù Installatore sono in sola lettura.** Una Pure 250 (firmware 25.01.09.00) ignora
   le scritture Modbus sullo sbilanciamento ventole (registro 14) e sulla soglia ore filtri (registro 24),
-  mentre negli stessi minuti accetta stagione, set-point e velocità: per questo sono esposti come sensori
-  e si cambiano dal menù Installatore del pannello.
+  mentre negli stessi minuti accetta stagione, set-point e velocità: per questo sono esposti come sensori.
+  La soglia ore filtri si può comunque cambiare da Home Assistant passando dal menù Installatore web
+  (vedi *Soglia allarme filtri*); lo sbilanciamento resta sul pannello.
 - **Le scritture Modbus da sole sono temporanee.** Un valore scritto via Modbus torna a quello salvato
   da pannello/web dopo circa un minuto senza accessi ai registri (misurato: tra 45 e 100 secondi): basta
   un riavvio di Home Assistant, e una ventola spenta da Home Assistant ripartirebbe alla velocità
@@ -135,6 +138,29 @@ Due particolarità del pannello, verificate su una Pure 250:
   restano dopo oltre due minuti senza alcun accesso. Fa eccezione il booster, che è un conto alla
   rovescia e non viene salvato. Chi automatizza la velocità con cambi molto frequenti tenga presente che
   ogni cambio è una scrittura sulla memoria non volatile dell'unità, come lo sarebbe dal pannello.
+
+### Soglia allarme filtri (menù Installatore web)
+
+Con l'allarme filtri a ore (impostato nel menù Fabbrica), il pannello segnala i filtri sporchi quando le ore
+di funzionamento arrivano alla soglia *Ore Filtri* del menù Installatore. Per azzerare l'allarme dopo il
+cambio filtri il manuale dice: **Ore Filtri = ore di funzionamento attuali + ore fino al prossimo cambio**.
+
+Via Modbus la soglia si legge ma non si scrive, quindi l'integrazione fa quello che farebbe l'installatore:
+entra nel menù Installatore della pagina web con il **codice installatore**, sposta la riga *Ore Filtri* con
+i tasti (500 h per pressione, 5000 h con la doppia freccia), esce dal menù e poi rilegge il valore via Modbus.
+
+- Si attiva da **Configura** nella scheda dell'integrazione: *Codice installatore* (4 cifre) e *Ore di
+  funzionamento tra un cambio filtri e l'altro* (2000 h di default, il valore del manuale). Il codice resta
+  nelle opzioni dell'integrazione in Home Assistant; senza codice non cambia niente.
+- Compaiono il numero **Filter Alarm Threshold** (modificabile) e il pulsante **Filters Replaced**, che
+  imposta la soglia a ore attuali + intervallo, arrotondata ai 500 h dell'unità.
+- Ogni modifica dura una ventina di secondi; dopo, per circa un minuto, l'unità rifiuta i comandi Modbus
+  (come dopo ogni modifica da pagina web): i comandi dati nel frattempo restano in coda e partono appena
+  l'unità li accetta.
+- Se l'allarme filtri non è a ore, la riga *Ore Filtri* non c'è e l'integrazione lo dice con un errore.
+
+Verificato su una Pure 250 (pannello EVO-PH, firmware 25.01.09.00): 4000 → 4500 → 4000 h, ogni passo
+riletto via Modbus.
 
 ## Diagnostica
 
