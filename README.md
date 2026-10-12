@@ -16,7 +16,8 @@ Compatibile con Pure 250 e altri modelli della serie Pure il cui comando touch �
 - **Allarmi e stato** — Filtri sporchi, allarme generico, bypass free-cooling, set-point temperatura.
 - **Via Modbus TCP** — Velocità reale dei due ventilatori, ore di funzionamento, singoli allarmi
   (sonde, ventilatori, comunicazione, configurazione, antigelo), modalità di funzionamento, stagione,
-  modalità bypass, soglia ore filtri, versione firmware.
+  modalità bypass, soglia ore filtri, sbilanciamento ventole, versione firmware e, sui pannelli che la
+  pubblicano, la configurazione del menù Fabbrica.
 - **Config flow** — Aggiungi tramite UI → "Pure VMC".
 
 ## Installazione
@@ -89,6 +90,8 @@ Create solo se l'unità risponde su Modbus TCP (porta 502).
 | `number` | Temperature Setpoint | Set-point temperatura, passi di 0,2 °C — **modificabile** |
 | `number` | Boost Timer | Minuti di booster: impostarlo avvia il booster, 0 lo annulla |
 | `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
+| `sensor` | Fan Balance | Velocità del ventilatore di ripresa in % di quello di immissione (parametro del menù Installatore) — diagnostica, solo se l'unità lo usa |
+| `sensor` | Heater Type, Regulation Probe, Filter Alarm Type, Fan Alarm Type, Bypass Type, Anti-Frost Type, Controller Boards | Configurazione del menù Fabbrica (registri 7 e 8): post-riscaldamento, sonda di regolazione, tipo di allarme filtri e ventilatori, tipo di bypass, antigelo, schede installate — diagnostica, **solo sui pannelli che la pubblicano** (una Pure 250 lascia questi registri a 0, e allora non vengono creati) |
 | `binary_sensor` | Anti-Frost | Antigelo scambiatore attivo |
 | `binary_sensor` | … Fault (×8) | Le singole voci della schermata Allarmi: comunicazione, configurazione, sonde Te/Tr/Tx/Ti, ventilatori, antigelo — `problem`, diagnostica |
 
@@ -119,6 +122,10 @@ Due particolarità del pannello, verificate su una Pure 250:
   dopo averlo scritto. Se il valore non si è mosso, la ventola ripiega subito sull'interfaccia web; per le
   altre entità il comando resta in coda e viene riprovato ogni 15 secondi (fino a 3 minuti) finché
   l'unità lo accetta — nel frattempo l'entità mostra ancora il valore reale.
+- **I parametri del menù Installatore sono in sola lettura.** Una Pure 250 (firmware 25.01.09.00) ignora
+  le scritture Modbus sullo sbilanciamento ventole (registro 14) e sulla soglia ore filtri (registro 24),
+  mentre negli stessi minuti accetta stagione, set-point e velocità: per questo sono esposti come sensori
+  e si cambiano dal menù Installatore del pannello.
 - **Le scritture Modbus da sole sono temporanee.** Un valore scritto via Modbus torna a quello salvato
   da pannello/web dopo circa un minuto senza accessi ai registri (misurato: tra 45 e 100 secondi): basta
   un riavvio di Home Assistant, e una ventola spenta da Home Assistant ripartirebbe alla velocità
