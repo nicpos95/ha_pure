@@ -10,6 +10,13 @@ CONF_HOST = "host"
 CONF_MODBUS = "modbus"
 DEFAULT_MODBUS = True
 
+# Options: the installer code, to change the filter-alarm threshold through the
+# web Installer menu (the unit ignores Modbus writes to it), and the run hours
+# between two filter changes, for the "filters replaced" button
+CONF_INSTALLER_CODE = "installer_code"
+CONF_FILTER_INTERVAL = "filter_interval"
+DEFAULT_FILTER_INTERVAL = 2000  # hours, the manual's default
+
 # Endpoints
 ENDPOINT_SPEED = "/ifspeed_sp.html"
 ENDPOINT_TEMP_EXTERNAL = "/iftemp_e.html"

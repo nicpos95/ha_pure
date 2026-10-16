@@ -22,9 +22,18 @@
         "title": "Pure VMC",
         "description": "Modbus TCP restituisce più dati delle pagine web (velocità dei ventilatori, ore di funzionamento, singoli allarmi) con una sola breve richiesta. Viene usato solo se l'unità risponde sulla porta 502.",
         "data": {
-          "modbus": "Leggi l'unità tramite Modbus TCP"
+          "modbus": "Leggi l'unità tramite Modbus TCP",
+          "installer_code": "Codice installatore",
+          "filter_interval": "Ore di funzionamento tra un cambio filtri e l'altro"
+        },
+        "data_description": {
+          "installer_code": "Quattro cifre, il codice del menù Installatore del pannello. Con il codice la soglia dell'allarme filtri si può cambiare da Home Assistant (dal menù Installatore web: circa 20 s, e per un minuto dopo l'unità rifiuta i comandi Modbus). Lasciare vuoto per tenerla in sola lettura.",
+          "filter_interval": "Per il pulsante \"Filtri Sostituiti\": il prossimo allarme filtri arriva dopo queste ore di funzionamento."
         }
       }
+    },
+    "error": {
+      "invalid_installer_code": "Il codice installatore è di quattro cifre."
     }
   },
   "entity": {
@@ -205,6 +214,9 @@
       },
       "boost_timer": {
         "name": "Timer Booster"
+      },
+      "filter_max_hours": {
+        "name": "Soglia Allarme Filtri"
       }
     },
     "select": {
@@ -223,6 +235,11 @@
           "off": "Chiuso",
           "on": "Aperto"
         }
+      }
+    },
+    "button": {
+      "filters_replaced": {
+        "name": "Filtri Sostituiti"
       }
     }
   }
