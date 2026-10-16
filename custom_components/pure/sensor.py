@@ -25,6 +25,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, SPEED_TIMER_MODE
 from .coordinator import PureCoordinator
 from .entity_base import PureEntity
+from .modbus import BOARD_MODELS, FACTORY_CONFIG_1
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -129,6 +130,51 @@ MODBUS_SENSORS: tuple[PureSensorDescription, ...] = (
 )
 
 
+# Installer parameter, only on units that use it (others leave the register at 0)
+SPEED_BALANCE_SENSOR = PureSensorDescription(
+    key="speed_balance",
+    data_key="speed_balance",
+    translation_key="speed_balance",
+    native_unit_of_measurement=PERCENTAGE,
+    entity_category=EntityCategory.DIAGNOSTIC,
+    icon="mdi:scale-balance",
+)
+
+
+# The Factory-menu configuration: read-only, and only on panels that publish it
+CONFIGURATION_ICONS = {
+    "heater_type": "mdi:radiator",
+    "regulation_probe": "mdi:gauge",
+    "filter_alarm_type": "mdi:air-filter",
+    "fan_alarm_type": "mdi:fan-alert",
+    "bypass_type": "mdi:valve",
+    "anti_frost_type": "mdi:snowflake-alert",
+}
+CONFIGURATION_SENSORS: tuple[PureSensorDescription, ...] = (
+    *(
+        PureSensorDescription(
+            key=name,
+            data_key=name,
+            translation_key=name,
+            device_class=SensorDeviceClass.ENUM,
+            options=list(states.values()),
+            entity_category=EntityCategory.DIAGNOSTIC,
+            icon=CONFIGURATION_ICONS[name],
+        )
+        for name, _first_bit, _bit_count, states in FACTORY_CONFIG_1
+    ),
+    PureSensorDescription(
+        key="board_model",
+        data_key="board_model",
+        translation_key="board_model",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(BOARD_MODELS.values()),
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:chip",
+    ),
+)
+
+
 # Shown instead of the bypass mode select on units that do not let it be chosen
 BYPASS_MODE_SENSOR = PureSensorDescription(
     key="bypass_mode",
@@ -180,6 +226,13 @@ async def async_setup_entry(
             entities.append(
                 PureValueSensor(coordinator, entry.entry_id, BYPASS_MODE_SENSOR)
             )
+        if coordinator.data.get("speed_balance") is not None:
+            entities.append(
+                PureValueSensor(coordinator, entry.entry_id, SPEED_BALANCE_SENSOR)
+            )
+        if coordinator.data.get("configuration_reported"):
+            for desc in CONFIGURATION_SENSORS:
+                entities.append(PureValueSensor(coordinator, entry.entry_id, desc))
 
     async_add_entities(entities)
 

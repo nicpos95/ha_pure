@@ -123,3 +123,42 @@ def test_decode_faults_and_boost() -> None:
     assert data["fault_configuration"] is True
     assert data["fault_anti_frost"] is True
     assert data["filter_dirty"] is False
+
+
+def test_decode_factory_configuration() -> None:
+    # A Pure 250 leaves register 7 at 0: "not reported", not "nothing fitted"
+    data = decode_registers(_registers())
+    assert data["configuration_reported"] is False
+    assert "heater_type" not in data
+
+    flags = 5 | 1 << 3 | 2 << 4 | 2 << 6 | 2 << 8 | 1 << 10 | 1 << 12
+    data = decode_registers(_registers(r7=flags, r8=2))
+    assert data["configuration_reported"] is True
+    assert {
+        key: data[key]
+        for key in (
+            "heater_type",
+            "regulation_probe",
+            "filter_alarm_type",
+            "fan_alarm_type",
+            "bypass_type",
+            "anti_frost_type",
+            "board_model",
+        )
+    } == {
+        "heater_type": "water_modulating",
+        "regulation_probe": "humidity",
+        "filter_alarm_type": "hours",
+        "fan_alarm_type": "tacho",
+        "bypass_type": "season",
+        "anti_frost_type": "fan_speed",
+        "board_model": "x540_u3_u4_x531",
+    }
+    # A value the manual does not list reads as unknown
+    assert decode_registers(_registers(r7=7))["heater_type"] is None
+
+
+def test_decode_speed_balance() -> None:
+    assert decode_registers(_registers())["speed_balance"] == 100
+    # Outside its range it is a parameter the unit does not use
+    assert decode_registers(_registers(r14=0))["speed_balance"] is None

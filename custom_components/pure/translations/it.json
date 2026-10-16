@@ -82,6 +82,69 @@
           "off": "Chiuso",
           "on": "Aperto"
         }
+      },
+      "heater_type": {
+        "name": "Post-riscaldamento",
+        "state": {
+          "none": "Nessuno",
+          "electric": "Elettrico",
+          "electric_two_stage": "Elettrico a due stadi",
+          "water": "Batteria ad acqua",
+          "electric_modulating": "Elettrico modulante",
+          "water_modulating": "Batteria ad acqua modulante"
+        }
+      },
+      "regulation_probe": {
+        "name": "Sonda di Regolazione",
+        "state": {
+          "none": "Nessuna",
+          "air_quality": "Qualità aria (CO2/VOC)",
+          "humidity": "Umidità",
+          "external_signal": "Segnale esterno 0-10 V"
+        }
+      },
+      "filter_alarm_type": {
+        "name": "Tipo Allarme Filtri",
+        "state": {
+          "none": "Nessuno",
+          "pressure_switch": "Pressostati",
+          "hours": "Ore di funzionamento"
+        }
+      },
+      "fan_alarm_type": {
+        "name": "Tipo Allarme Ventilatori",
+        "state": {
+          "none": "Nessuno",
+          "pressure_switch": "Pressostati",
+          "tacho": "Segnale tachimetrico"
+        }
+      },
+      "bypass_type": {
+        "name": "Tipo Bypass",
+        "state": {
+          "none": "Non presente",
+          "season": "Stagionale",
+          "universal": "Universale"
+        }
+      },
+      "anti_frost_type": {
+        "name": "Tipo Antigelo",
+        "state": {
+          "none": "Nessuno",
+          "fan_speed": "Velocità ventilatori",
+          "heater": "Riscaldatore"
+        }
+      },
+      "board_model": {
+        "name": "Schede di Controllo",
+        "state": {
+          "x540_u0_u2": "X540 U0-U2",
+          "x540_u3_u4": "X540 U3-U4",
+          "x540_u3_u4_x531": "X540 U3-U4 + X531"
+        }
+      },
+      "speed_balance": {
+        "name": "Sbilanciamento Ventole"
       }
     },
     "binary_sensor": {
