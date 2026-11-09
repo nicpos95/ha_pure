@@ -202,7 +202,7 @@ raffrescamento: se si sovrappongono, ognuno spegne l'interruttore dell'altro e l
 scrittura in memoria permanente) a ogni aggiornamento delle sonde. Un unico termostato caldo/freddo lo evita.
 Con un bypass *universale* gli interruttori non vengono creati: lì il bypass si comanda direttamente da
 *Bypass Mode*.
-Bypass universale e post-riscaldamento si leggono dalla configurazione di fabbrica (registro 7); molte unità,
+Bypass universale e post-riscaldamento si leggono dalla configurazione di fabbrica (registro 7); alcune unità,
 ad esempio la Pure 250, lo lasciano a 0 (i sensori *Factory* mancano) e allora l'integrazione non li vede: su
 un'unità con post-riscaldamento o bypass universale non abilitare questi interruttori.
 
