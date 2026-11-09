@@ -229,8 +229,9 @@ Due interruttori, **disattivati di default** (vanno abilitati dalla pagina delle
 termostato di Home Assistant di decidere quando il bypass *stagionale* può far entrare l'aria esterna. Un
 bypass stagionale non si comanda: l'unità lo apre da sola in base alla stagione (vedi *Season*), quindi
 gli interruttori agiscono sulla **stagione** (registro 20) e sul **set-point** (registro 52). Al massimo
-uno dei due è acceso; accenderne uno spegne l'altro. Appena abilitati partono con Free Cooling acceso se
-l'unità non è in inverno, altrimenti entrambi spenti, e da lì agiscono subito come da tabella.
+uno dei due è acceso; accenderne uno spegne l'altro. Appena abilitato, Free Cooling parte acceso se l'unità è
+in estate; altrimenti, o se si abilita solo Free Heating, partono spenti. Da lì agiscono subito come da tabella.
+Disattivarli non rimette stagione e set-point com'erano: annotarli prima di abilitarli.
 
 | Stato | Stagione | Set-point | Effetto |
 |---|---|---|---|
@@ -240,7 +241,10 @@ l'unità non è in inverno, altrimenti entrambi spenti, e da lì agiscono subito
 
 A ventilatori fermi le sonde misurano solo i condotti e la stagione non viene toccata. Sulle unità che
 dichiarano un post-riscaldamento (registro 7, bit 0-2) il set-point non viene toccato, perché lì è la
-temperatura a cui punta la batteria. Ogni cambio è una scrittura in memoria permanente. Lo stato degli
+temperatura a cui punta la batteria. Un registro 7 a 0 (come su una Pure 250) non dichiara niente: allora né
+il post-riscaldamento né un bypass universale sono visibili, e su un'unità che li ha gli interruttori non vanno
+abilitati. Con due termostati separati il riscaldamento va tenuto chiaramente sotto il raffrescamento, o la
+stagione cambia a ogni aggiornamento. Ogni cambio è una scrittura in memoria permanente. Lo stato degli
 interruttori sopravvive al riavvio di Home Assistant; l'attributo `season` mostra la stagione letta
 dall'unità. Con un bypass *universale* non vengono creati: lì si usa *Bypass Mode*.
 

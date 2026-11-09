@@ -197,14 +197,22 @@ sfruttano questo (al massimo uno dei due è acceso):
 Collegati come *raffrescatore* e *riscaldatore* di un termostato di Home Assistant (ad esempio due helper
 **Termostato generico**, uno in raffrescamento e uno in riscaldamento, oppure un termostato caldo/freddo),
 il bypass si apre solo finché la casa è lontana dalla temperatura desiderata e l'aria esterna la avvicina.
+Con due termostati separati la temperatura del riscaldamento deve stare chiaramente sotto quella del
+raffrescamento: se si sovrappongono, ognuno spegne l'interruttore dell'altro e la stagione cambia (con una
+scrittura in memoria permanente) a ogni aggiornamento delle sonde. Un unico termostato caldo/freddo lo evita.
 Con un bypass *universale* gli interruttori non vengono creati: lì il bypass si comanda direttamente da
 *Bypass Mode*.
+Bypass universale e post-riscaldamento si leggono dalla configurazione di fabbrica (registro 7); molte unità,
+ad esempio la Pure 250, lo lasciano a 0 (i sensori *Factory* mancano) e allora l'integrazione non li vede: su
+un'unità con post-riscaldamento o bypass universale non abilitare questi interruttori.
 
 Gli interruttori sono **disattivati di default**: una volta attivi, stagione e set-point seguono loro (e, con
 entrambi spenti, la temperatura esterna), cosa che una nuova installazione non deve iniziare a fare da sola.
 Per usarli vanno abilitati in **Impostazioni → Dispositivi e servizi → Pure VMC → Entità** (*Free Cooling* e
-*Free Heating*). Finché restano disattivati l'integrazione non cambia da sola né la stagione né il set-point; appena
-abilitati partono con Free Cooling acceso se l'unità non è in inverno, altrimenti entrambi spenti.
+*Free Heating*). Finché restano disattivati l'integrazione non cambia da sola né la stagione né il set-point. Appena
+abilitato, Free Cooling parte acceso se l'unità è in estate; altrimenti, o se si abilita solo Free Heating,
+partono spenti e la stagione segue la temperatura esterna come sopra. Prima di abilitarli conviene annotare la
+stagione e i set-point estivo e invernale: disattivarli o rimuovere l'integrazione non li rimette com'erano.
 
 ## Diagnostica
 
