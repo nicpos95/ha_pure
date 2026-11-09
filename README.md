@@ -168,7 +168,7 @@ riletto via Modbus.
 ## Diagnostica
 
 Da **Impostazioni → Dispositivi e servizi → Pure VMC → Scarica diagnostica** si ottiene lo stato
-decodificato insieme ai registri Modbus grezzi (l'indirizzo IP viene oscurato). Le varianti di queste unità
+decodificato insieme ai registri Modbus grezzi (l'indirizzo IP e il codice installatore vengono oscurati). Le varianti di queste unità
 differiscono nella configurazione: allegare il file a una segnalazione permette di capire cosa riporta
 l'unità senza dover eseguire script.
 
