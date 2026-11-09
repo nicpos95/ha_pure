@@ -33,6 +33,7 @@ pagine web mostrano solo nelle schermate dei menù.
 | Season | `select` | **Modbus** | sì |
 | Temperature Setpoint | `number` | **Modbus** | sì |
 | Boost Timer | `number` | **Modbus** | sì |
+| Free Cooling / Free Heating | `switch` | **Modbus** (stagione e set-point) | sì; disattivati di default, non con bypass universale |
 | Anti-Frost | `binary_sensor` | **Modbus** | — |
 | Communication / Configuration / … Fault (8) | `binary_sensor` | **Modbus** | — |
 
@@ -221,6 +222,31 @@ Minuti di booster rimanenti (registro 53, in secondi, arrotondati per eccesso al
 valore avvia il booster** per quella durata (1–240 minuti, il pannello va da 1 minuto a 4 ore),
 **impostare 0 lo annulla.** È l'unico valore che l'integrazione non salva in memoria permanente,
 essendo un conto alla rovescia.
+
+### Free Cooling / Free Heating — `switch.pure_vmc_free_cooling`, `switch.pure_vmc_free_heating`
+
+Due interruttori, **disattivati di default** (vanno abilitati dalla pagina delle entità), che permettono a un
+termostato di Home Assistant di decidere quando il bypass *stagionale* può far entrare l'aria esterna. Un
+bypass stagionale non si comanda: l'unità lo apre da sola in base alla stagione (vedi *Season*), quindi
+gli interruttori agiscono sulla **stagione** (registro 20) e sul **set-point** (registro 52). Al massimo
+uno dei due è acceso; accenderne uno spegne l'altro. Appena abilitato, Free Cooling parte acceso se l'unità è
+in estate; altrimenti, o se si abilita solo Free Heating, partono spenti. Da lì agiscono subito come da tabella.
+Disattivarli non rimette stagione e set-point com'erano: annotarli prima di abilitarli.
+
+| Stato | Stagione | Set-point | Effetto |
+|---|---|---|---|
+| Free Cooling acceso | estate | estivo a 20 °C se era più alto | free cooling ogni volta che fuori è più fresco che dentro |
+| Free Heating acceso | inverno | invernale a 30 °C (il massimo) | il bypass si apre solo quando fuori è più caldo che dentro |
+| entrambi spenti | inverno se fuori è più freddo, estate se è più caldo (isteresi 0,5 °C, al massimo un cambio ogni 15 minuti) | invernale a 30 °C | bypass tenuto chiuso: lo scambiatore conserva la temperatura di casa |
+
+A ventilatori fermi le sonde misurano solo i condotti e la stagione non viene toccata. Sulle unità che
+dichiarano un post-riscaldamento (registro 7, bit 0-2) il set-point non viene toccato, perché lì è la
+temperatura a cui punta la batteria. Un registro 7 a 0 (come su una Pure 250) non dichiara niente: allora né
+il post-riscaldamento né un bypass universale sono visibili, e su un'unità che li ha gli interruttori non vanno
+abilitati. Con due termostati separati il riscaldamento va tenuto chiaramente sotto il raffrescamento, o la
+stagione cambia a ogni aggiornamento. Ogni cambio è una scrittura in memoria permanente. Lo stato degli
+interruttori sopravvive al riavvio di Home Assistant; l'attributo `season` mostra la stagione letta
+dall'unità. Con un bypass *universale* non vengono creati: lì si usa *Bypass Mode*.
 
 ## Binary sensor solo Modbus
 

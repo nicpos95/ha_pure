@@ -91,6 +91,8 @@ Create solo se l'unità risponde su Modbus TCP (porta 502).
 | `select` | Season | Stagione (`auto` / `winter` / `summer`) — **modificabile** |
 | `select` / `sensor` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`). **Modificabile** solo se il bypass è configurato come *universale* (menù Fabbrica): altrimenti l'unità ignora l'impostazione, e viene mostrata come sensore diagnostico |
 | `number` | Temperature Setpoint | Set-point temperatura, passi di 0,2 °C — **modificabile** |
+| `switch` | Free Cooling | Consente o blocca il free-cooling del bypass stagionale (vedi sotto) — pensato per essere comandato da un termostato; disattivato di default |
+| `switch` | Free Heating | Consente o blocca il free-heating del bypass stagionale (vedi sotto); accenderlo spegne Free Cooling e viceversa; disattivato di default |
 | `number` | Boost Timer | Minuti di booster: impostarlo avvia il booster, 0 lo annulla |
 | `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
 | `number` | Filter Alarm Threshold | Soglia ore dell'allarme filtri, **modificabile** dal menù Installatore web — solo con il codice installatore nelle opzioni (vedi sotto) |
@@ -164,6 +166,53 @@ i tasti (500 h per pressione, 5000 h con la doppia freccia), esce dal menù e po
 
 Verificato su una Pure 250 (pannello EVO-PH, firmware 25.01.09.00): 4000 → 4500 → 4000 h, ogni passo
 riletto via Modbus.
+
+### Free cooling e termostato
+
+Un bypass *stagionale* non si comanda: l'unità lo apre da sola. Come osservato su una Pure 250 (il
+manuale ne racconta solo metà):
+
+- in **estate** lo apre quando fuori è più fresco che dentro e, a quanto pare, la casa è sopra il set-point
+  estivo (con set-point 26 °C e 24 °C in casa è rimasto chiuso; con 20 °C si è aperto in tre minuti, ma
+  poi non si è richiuso tornando a 26): in una notte d'estate continua a raffrescare la casa ben oltre il
+  comfort;
+- in **inverno** lo apre quando fuori è più caldo che dentro (free heating) e anche quando fuori è più
+  fresco ma la casa è sopra il set-point invernale. Il set-point è memorizzato per stagione.
+
+Reagisce da uno a quattro minuti dopo un cambio. Gli interruttori **Free Cooling** e **Free Heating**
+sfruttano questo (al massimo uno dei due è acceso):
+
+- **Free Cooling acceso** → stagione *estate* con il set-point estivo basso (20 °C, così a decidere quando
+  basta è il termostato, ma un'unità rimasta senza Home Assistant non raffresca la casa oltre): l'unità fa
+  free cooling ogni volta che fuori è più fresco;
+- **Free Heating acceso** → stagione *inverno* con il set-point invernale al massimo (30 °C): il bypass si
+  apre solo quando fuori è più caldo che dentro;
+- **entrambi spenti** → il bypass viene tenuto chiuso: *inverno* con il set-point invernale al massimo
+  finché fuori è più freddo che dentro, *estate* quando è più caldo; lo scambiatore conserva così la
+  temperatura di casa. La stagione segue la temperatura esterna con un'isteresi di 0,5 °C e non più di un
+  cambio ogni 15 minuti (ogni cambio è una scrittura nella memoria non volatile dell'unità). A ventilatori
+  fermi le sonde misurano solo i condotti, e la stagione non viene toccata. Sulle unità che dichiarano un
+  post-riscaldamento il set-point non viene toccato, perché lì è la temperatura a cui punta la batteria.
+
+Collegati come *raffrescatore* e *riscaldatore* di un termostato di Home Assistant (ad esempio due helper
+**Termostato generico**, uno in raffrescamento e uno in riscaldamento, oppure un termostato caldo/freddo),
+il bypass si apre solo finché la casa è lontana dalla temperatura desiderata e l'aria esterna la avvicina.
+Con due termostati separati la temperatura del riscaldamento deve stare chiaramente sotto quella del
+raffrescamento: se si sovrappongono, ognuno spegne l'interruttore dell'altro e la stagione cambia (con una
+scrittura in memoria permanente) a ogni aggiornamento delle sonde. Un unico termostato caldo/freddo lo evita.
+Con un bypass *universale* gli interruttori non vengono creati: lì il bypass si comanda direttamente da
+*Bypass Mode*.
+Bypass universale e post-riscaldamento si leggono dalla configurazione di fabbrica (registro 7); alcune unità,
+ad esempio la Pure 250, lo lasciano a 0 (i sensori *Factory* mancano) e allora l'integrazione non li vede: su
+un'unità con post-riscaldamento o bypass universale non abilitare questi interruttori.
+
+Gli interruttori sono **disattivati di default**: una volta attivi, stagione e set-point seguono loro (e, con
+entrambi spenti, la temperatura esterna), cosa che una nuova installazione non deve iniziare a fare da sola.
+Per usarli vanno abilitati in **Impostazioni → Dispositivi e servizi → Pure VMC → Entità** (*Free Cooling* e
+*Free Heating*). Finché restano disattivati l'integrazione non cambia da sola né la stagione né il set-point. Appena
+abilitato, Free Cooling parte acceso se l'unità è in estate; altrimenti, o se si abilita solo Free Heating,
+partono spenti e la stagione segue la temperatura esterna come sopra. Prima di abilitarli conviene annotare la
+stagione e i set-point estivo e invernale: disattivarli o rimuovere l'integrazione non li rimette com'erano.
 
 ## Diagnostica
 
