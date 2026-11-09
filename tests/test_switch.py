@@ -1,14 +1,16 @@
 """The free cooling and free heating switches: steering a seasonal bypass through the season."""
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.pure.const import CONF_HOST, DOMAIN
+from custom_components.pure.modbus import PureModbusError
 
 from .conftest import FakePanel
 from .test_init import HOST, _modbus_on
@@ -26,9 +28,9 @@ def _set_temperatures(panel: FakePanel, outside: float, inside: float) -> None:
 
 
 async def _setup(
-    hass: HomeAssistant, panel: FakePanel, enabled: bool = True
+    hass: HomeAssistant, panel: FakePanel, enabled: tuple[str, ...] = ("cooling", "heating")
 ) -> MockConfigEntry:
-    """Set the integration up; ``enabled`` = the user has turned the switches on.
+    """Set the integration up; ``enabled`` = the switches the user has turned on.
 
     They are disabled by default, so an install that uses them has them in the
     entity registry, enabled, before the integration starts.
@@ -37,7 +39,7 @@ async def _setup(
     entry.add_to_hass(hass)
     if enabled:
         registry = er.async_get(hass)
-        for mode in ("cooling", "heating"):
+        for mode in enabled:
             registry.async_get_or_create(
                 "switch",
                 DOMAIN,
@@ -66,7 +68,7 @@ async def test_a_fresh_install_leaves_the_unit_alone(
     panel.registers[51] = 40
     panel.registers[87] = panel.registers[88] = 1200
     _set_temperatures(panel, outside=19.0, inside=25.0)
-    entry = await _setup(hass, panel, enabled=False)
+    entry = await _setup(hass, panel, enabled=())
     with patch("custom_components.pure.switch.MIN_SEASON_CHANGE_INTERVAL", 0):
         await _refresh(hass, entry)
         await _refresh(hass, entry)
@@ -247,10 +249,44 @@ async def test_not_offered_for_a_universal_bypass(
     hass: HomeAssistant, panel: FakePanel, socket_enabled
 ) -> None:
     panel.registers[7] = 2 << 10
-    entry = await _setup(hass, panel, enabled=False)
+    entry = await _setup(hass, panel, enabled=())
     registry = er.async_get(hass)
     for mode in ("cooling", "heating"):
         assert registry.async_get_entity_id("switch", DOMAIN, f"{entry.entry_id}_free_{mode}") is None
     assert hass.states.get(SWITCH) is None
     assert hass.states.get(HEATING_SWITCH) is None
     assert hass.states.get("select.pure_vmc_bypass_mode") is not None
+
+
+async def test_free_heating_alone_leaves_a_summer_unit_alone(
+    hass: HomeAssistant, panel: FakePanel, socket_enabled
+) -> None:
+    # Only Free Heating enabled, and off: both off, so the season follows the
+    # outside air (a cool night: winter, the bypass held closed). No hidden Free
+    # Cooling may keep summer and lower its set-point
+    panel.registers[51] = 40
+    panel.registers[87] = panel.registers[88] = 1200
+    _set_temperatures(panel, outside=19.0, inside=25.0)
+    entry = await _setup(hass, panel, enabled=("heating",))
+    assert hass.states.get(HEATING_SWITCH).state == "off"
+    assert hass.states.get(SWITCH) is None
+    with patch("custom_components.pure.switch.MIN_SEASON_CHANGE_INTERVAL", 0):
+        await _refresh(hass, entry)
+        await _refresh(hass, entry)
+    assert panel.registers[20] & 0b11 == WINTER
+    assert panel.setpoints[SUMMER] == 260  # the summer set-point untouched
+
+
+async def test_a_failed_write_shows_the_mode_still_in_force(
+    hass: HomeAssistant, panel: FakePanel, entry: MockConfigEntry
+) -> None:
+    assert hass.states.get(SWITCH).state == "on"
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    with patch.object(
+        coordinator, "async_write_register", AsyncMock(side_effect=PureModbusError("timed out"))
+    ), pytest.raises(HomeAssistantError):
+        await _turn(hass, "turn_on", HEATING_SWITCH)
+    await hass.async_block_till_done()
+    assert hass.states.get(HEATING_SWITCH).state == "off"
+    assert hass.states.get(SWITCH).state == "on"
+    assert panel.registers[20] & 0b11 == SUMMER

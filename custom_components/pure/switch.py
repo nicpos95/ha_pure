@@ -104,9 +104,9 @@ class BypassControl:
     def __init__(self, hass: HomeAssistant, coordinator: PureCoordinator) -> None:
         self.hass = hass
         self.coordinator = coordinator
-        self.mode: str | None = (
-            COOLING if coordinator.data.get("season") != "winter" else None
-        )
+        # Set by the switches as they are added (restore or start): a switch the
+        # user hasn't enabled is never added, so it can't leave a mode behind
+        self.mode: str | None = None
         self._last_change: float | None = None
         self._lock = asyncio.Lock()
         self._following = False
@@ -124,14 +124,31 @@ class BypassControl:
         elif self.mode == mode:
             self.mode = None
 
-    async def async_set_mode(self, mode: str | None) -> None:
-        self.mode = mode
+    @callback
+    def start(self, mode: str) -> None:
+        """A switch enabled with nothing to restore: Free Cooling starts on in summer."""
+        if (
+            mode == COOLING
+            and self.mode is None
+            and self.coordinator.data.get("season") == "summer"
+        ):
+            self.mode = COOLING
+
+    @callback
+    def _refresh(self) -> None:
         for listener in self._listeners:
             listener()
+
+    async def async_set_mode(self, mode: str | None) -> None:
+        previous, self.mode = self.mode, mode
+        self._refresh()
         try:
             async with self._lock:
                 await self._async_apply(commanded=True)
         except PureModbusError as err:
+            # The unit didn't take it: show the mode that is still in force
+            self.mode = previous
+            self._refresh()
             raise HomeAssistantError(str(err)) from err
 
     @callback
@@ -254,6 +271,8 @@ class PureBypassSwitch(PureEntity, SwitchEntity, RestoreEntity):
         await super().async_added_to_hass()
         if (last_state := await self.async_get_last_state()) is not None:
             self._control.restore(self._mode, last_state.state == STATE_ON)
+        else:
+            self._control.start(self._mode)
         self._control.add_listener(self.async_write_ha_state)
 
     @property
