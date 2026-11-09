@@ -91,8 +91,8 @@ Create solo se l'unità risponde su Modbus TCP (porta 502).
 | `select` | Season | Stagione (`auto` / `winter` / `summer`) — **modificabile** |
 | `select` / `sensor` | Bypass Mode | Gestione bypass (`auto` / `off` / `on`). **Modificabile** solo se il bypass è configurato come *universale* (menù Fabbrica): altrimenti l'unità ignora l'impostazione, e viene mostrata come sensore diagnostico |
 | `number` | Temperature Setpoint | Set-point temperatura, passi di 0,2 °C — **modificabile** |
-| `switch` | Free Cooling | Consente o blocca il free-cooling del bypass stagionale (vedi sotto) — pensato per essere comandato da un termostato |
-| `switch` | Free Heating | Consente o blocca il free-heating del bypass stagionale (vedi sotto); accenderlo spegne Free Cooling e viceversa |
+| `switch` | Free Cooling | Consente o blocca il free-cooling del bypass stagionale (vedi sotto) — pensato per essere comandato da un termostato; disattivato di default |
+| `switch` | Free Heating | Consente o blocca il free-heating del bypass stagionale (vedi sotto); accenderlo spegne Free Cooling e viceversa; disattivato di default |
 | `number` | Boost Timer | Minuti di booster: impostarlo avvia il booster, 0 lo annulla |
 | `sensor` | Filter Alarm Threshold | Soglia ore dell'allarme filtri — diagnostica |
 | `number` | Filter Alarm Threshold | Soglia ore dell'allarme filtri, **modificabile** dal menù Installatore web — solo con il codice installatore nelle opzioni (vedi sotto) |
@@ -199,6 +199,12 @@ Collegati come *raffrescatore* e *riscaldatore* di un termostato di Home Assista
 il bypass si apre solo finché la casa è lontana dalla temperatura desiderata e l'aria esterna la avvicina.
 Con un bypass *universale* gli interruttori non vengono creati: lì il bypass si comanda direttamente da
 *Bypass Mode*.
+
+Gli interruttori sono **disattivati di default**: una volta attivi, stagione e set-point seguono loro (e, con
+entrambi spenti, la temperatura esterna), cosa che una nuova installazione non deve iniziare a fare da sola.
+Per usarli vanno abilitati in **Impostazioni → Dispositivi e servizi → Pure VMC → Entità** (*Free Cooling* e
+*Free Heating*). Finché restano disattivati l'integrazione non cambia da sola né la stagione né il set-point; appena
+abilitati partono con Free Cooling acceso se l'unità non è in inverno, altrimenti entrambi spenti.
 
 ## Diagnostica
 

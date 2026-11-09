@@ -226,7 +226,13 @@ class PureBypassSwitch(PureEntity, SwitchEntity, RestoreEntity):
     Turning one on turns the other off. Wired as the cooler and the heater of
     a Home Assistant thermostat, the bypass then opens only while the house is
     away from the wanted temperature and outside air brings it closer.
+
+    Disabled until the user enables them: once they run, the season and the
+    set-point follow these switches (with both off, the outside temperature),
+    which a fresh install must not start doing on its own.
     """
+
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,

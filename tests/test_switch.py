@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.pure.const import CONF_HOST, DOMAIN
@@ -24,16 +25,60 @@ def _set_temperatures(panel: FakePanel, outside: float, inside: float) -> None:
     panel.registers[82] = int(inside * 10)
 
 
-@pytest.fixture
-async def entry(hass: HomeAssistant, panel: FakePanel, socket_enabled) -> MockConfigEntry:
-    panel.registers[51] = 40
-    panel.registers[87] = panel.registers[88] = 1200  # fans running
+async def _setup(
+    hass: HomeAssistant, panel: FakePanel, enabled: bool = True
+) -> MockConfigEntry:
+    """Set the integration up; ``enabled`` = the user has turned the switches on.
+
+    They are disabled by default, so an install that uses them has them in the
+    entity registry, enabled, before the integration starts.
+    """
     entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: HOST})
     entry.add_to_hass(hass)
+    if enabled:
+        registry = er.async_get(hass)
+        for mode in ("cooling", "heating"):
+            registry.async_get_or_create(
+                "switch",
+                DOMAIN,
+                f"{entry.entry_id}_free_{mode}",
+                config_entry=entry,
+                suggested_object_id=f"pure_vmc_free_{mode}",
+            )
     with _modbus_on(panel):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
     return entry
+
+
+@pytest.fixture
+async def entry(hass: HomeAssistant, panel: FakePanel, socket_enabled) -> MockConfigEntry:
+    panel.registers[51] = 40
+    panel.registers[87] = panel.registers[88] = 1200  # fans running
+    return await _setup(hass, panel)
+
+
+async def test_a_fresh_install_leaves_the_unit_alone(
+    hass: HomeAssistant, panel: FakePanel, socket_enabled
+) -> None:
+    # A summer night with the fans running: enabled, the switches would move the
+    # season and the set-points. Until the user enables them, nothing is written.
+    panel.registers[51] = 40
+    panel.registers[87] = panel.registers[88] = 1200
+    _set_temperatures(panel, outside=19.0, inside=25.0)
+    entry = await _setup(hass, panel, enabled=False)
+    with patch("custom_components.pure.switch.MIN_SEASON_CHANGE_INTERVAL", 0):
+        await _refresh(hass, entry)
+        await _refresh(hass, entry)
+    assert panel.stored == []
+    assert panel.registers[20] & 0b11 == SUMMER
+    assert panel.registers[52] == 260
+    registry = er.async_get(hass)
+    for mode in ("cooling", "heating"):
+        entity_id = registry.async_get_entity_id("switch", DOMAIN, f"{entry.entry_id}_free_{mode}")
+        assert entity_id is not None
+        assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(SWITCH) is None
 
 
 async def _refresh(hass: HomeAssistant, entry: MockConfigEntry) -> None:
@@ -103,11 +148,7 @@ async def test_setpoint_is_left_alone_with_a_heater(
     panel.registers[7] = 1  # an electric post-heater: the set-point is its target
     panel.registers[87] = 1200
     _set_temperatures(panel, outside=19.0, inside=25.0)
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: HOST})
-    entry.add_to_hass(hass)
-    with _modbus_on(panel):
-        assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+    entry = await _setup(hass, panel)
     await _turn(hass, "turn_off")
     await _refresh(hass, entry)
     assert panel.registers[20] & 0b11 == WINTER
@@ -206,11 +247,10 @@ async def test_not_offered_for_a_universal_bypass(
     hass: HomeAssistant, panel: FakePanel, socket_enabled
 ) -> None:
     panel.registers[7] = 2 << 10
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: HOST})
-    entry.add_to_hass(hass)
-    with _modbus_on(panel):
-        assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+    entry = await _setup(hass, panel, enabled=False)
+    registry = er.async_get(hass)
+    for mode in ("cooling", "heating"):
+        assert registry.async_get_entity_id("switch", DOMAIN, f"{entry.entry_id}_free_{mode}") is None
     assert hass.states.get(SWITCH) is None
     assert hass.states.get(HEATING_SWITCH) is None
     assert hass.states.get("select.pure_vmc_bypass_mode") is not None
